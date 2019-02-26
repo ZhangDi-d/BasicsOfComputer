@@ -29,3 +29,52 @@ Spring Data 不仅对传统的数据库访问技术：JDBC、Hibernate、JDO、T
 **两大 Repository 实现类：**
 	SimpleJpaRepository（org.springframework.data.jpa.repository.support）；
 	QueryDslJpaRepository（org.springframework.data.jpa.repository.support）。
+	
+	
+	
+	
+## 定义查询方法（Defining Query Methods）
+### 定义查询方法的配置方法
+
+```
+在这里插入代码片
+```
+```
+示例：选择性地暴露CRUD方法
+@NoRepositoryBeaninterface
+MyBaseRepository<T, ID extends Serializable> extends Repository<T, ID> {
+    T findOne(ID id); 
+    T save(T entity);
+}
+interface UserRepository extends MyBaseRepository<User, Long> {
+     User findByEmailAddress(EmailAddress emailAddress);
+}
+```
+
+在此实例中，您为所有域存储库定义了一个公共基础接口，并将其暴露出来，findOne(…) 和 save(…) 这些方法将由 Spring Data 路由到你提供的 MyBaseRepository 的基本 Repository 实现中。在 JPA 的默认情况下，SimpleJpaRepository 作为上面两个接口的实现类，所以 UserRepository 现在将能够保存用户，并通过 ID 查找单个，以及触发查询以 Users 通过其电子邮件地址查找。
+综上所述，得出以下两单：
+	1.MyRepository Extends Repository 接口就可以实现 Defining Query Methods 的功能。
+	2.继承其他 Repository 的子接口，或者自定义子接口，可以选择性的暴漏 SimpleJpaRepository 里面已经实现的基础公用方法。
+
+### 方法的查询策略设置
+通过下面的命令来配置方法的查询策略：
+```
+@EnableJpaRepositories(queryLookupStrategy= QueryLookupStrategy.Key.CREATE_IF_NOT_FOUND)
+```
+
+其中，QueryLookupStrategy.Key 的值一共就三个：
+
+1.Create：直接根据方法名进行创建，规则是根据方法名称的构造进行尝试，一般的方法是从方法名中删除给定的一组已知前缀，并解析该方法的其余部分。如果方法名不符合规则，启动的时候会报异常。
+2.USE_DECLARED_QUERY：声明方式创建，即本书说的注解的方式。启动的时候会尝试找到一个声明的查询，如果没有找到将抛出一个异常，查询可以由某处注释或其他方法声明。
+3.CREATE_IF_NOT_FOUND：这个是默认的，以上两种方式的结合版。先用声明方式进行查找，如果没有找到与方法相匹配的查询，那用 Create 的方法名创建规则创建一个查询。
+
+除非有特殊需求，一般直接用默认的，不用管。
+
+
+
+
+
+
+
+
+
