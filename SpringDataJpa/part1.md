@@ -71,8 +71,24 @@ interface UserRepository extends MyBaseRepository<User, Long> {
 除非有特殊需求，一般直接用默认的，不用管。
 
 
+### 查询方法的创建
+内部基础架构中有个根据方法名的查询生成器机制，对于在存储库的实体上构建约束查询很有用，该机制方法的前缀 find…By、read…By、query…By、count…By 和 get…By 从所述方法和开始分析它的其余部分（实体里面的字段）。
 
+感兴趣的读者可以到类 org.springframework.data.repository.query.parser.PartTree 查看相关源码的逻辑和处理方法，关键源码如下：
 
+### 方法的查询策略的属性表达式（Property Expressions）
+属性表达式只能引用托管（泛化）实体的直接属性，如前一个示例所示。在查询创建时，已经确保解析的属性是托管实体的属性，但是，还可以通过遍历嵌套属性定义约束。假设一个 Person 实体对象里面有一个 Address 的属性里面包含一个 ZipCode 属性。
+
+在这种情况下，方法名为：
+```
+List<Person> findByAddressZipCode(String zipCode);
+```
+创建及其查找的过程是：解析算法首先将整个 part（AddressZipCode）解释为属性，并使用该名称（uncapitalized）检查域类的属性，如果算法成功，则使用该属性，如果不是，则算法拆分了从右侧的驼峰部分的信号源到头部和尾部，并试图找出相应的属性。在我们的例子中，AddressZip 和 Code 如果算法找到一个具有该头部的属性，那么它需要尾部，并从那里继续构建树，然后按照刚刚描述的方式将尾部分割，如果第一个分割不匹配，则算法将分割点移动到左（Address，ZipCode），然后继续。
+虽然这在大多数情况下应该起作用，但算法可能会选择错误的属性。假设 Person 该类也有一个 addressZip 属性，该算法将在第一个分割轮中匹配，并且基本上选择错误的属性，最后失败（因为该类型 addressZip 可能没有 code 属性）。
+要解决这个歧义，可以在方法名称中使用手动定义遍历点，所以我们的方法名称最终会如此：
+```
+List<Person> findByAddress_ZipCode(ZipCode zipCode);
+```
 
 
 
