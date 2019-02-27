@@ -90,6 +90,78 @@ List<Person> findByAddressZipCode(String zipCode);
 List<Person> findByAddress_ZipCode(ZipCode zipCode);
 ```
 
+### 查询结果的处理
+
+#### 参数选择（Sort/Pageable）分页和排序
+##### 特定类型的参数，Pageable 并动态 Sort 地将分页和排序应用于查询
+案例：在查询方法中使用 Pageable、Slice 和 Sort。
+```
+Page<User> findByLastname(String lastname, Pageable pageable);
+Slice<User> findByLastname(String lastname, Pageable pageable);
+List<User> findByLastname(String lastname, Sort sort);
+List<User> findByLastname(String lastname, Pageable pageable);
+```
+
+
+##### 限制查询结果
+案例：在查询方法上加限制查询结果的关键字 First 和 top。
+```
+User findFirstByOrderByLastnameAsc();
+User findTopByOrderByAgeDesc();
+Page<User> queryFirst10ByLastname(String lastname, Pageable pageable);
+Slice<User> findTop3ByLastname(String lastname, Pageable pageable);
+List<User> findFirst10ByLastname(String lastname, Sort sort);
+List<User> findTop10ByLastname(String lastname, Pageable pageable);
+```
+查询方法的结果可以通过关键字来限制 first 或 top，其可以被可互换使用，可选的数值可以追加到顶部/第一个以指定要返回的最大结果的大小。如果数字被省略，则假设结果大小为 1，限制表达式也支持 Distinct 关键字。此外，对于将结果集限制为一个实例的查询，支持将结果包装到一个实例中 Optional。如果将分页或切片应用于限制查询分页（以及可用页数的计算），则在限制结果中应用。
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
