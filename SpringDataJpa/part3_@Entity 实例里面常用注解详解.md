@@ -527,6 +527,238 @@ public class Tag{
 
 **Spring Data JPA 为了简单的提高查询率，引入了 <font color=blue>EntityGraph</font> 的概念，可以解决 N+1 条 SQL 的问题。**
 
+### @EntityGraph
+JPA 2.1 推出来的 @EntityGraph、 @NamedEntityGraph 用来提高查询效率，很好的解决了 N+1 条 SQL 的问题，两者需要配合起来使用，缺一不可。@NamedEntityGraph 配置在 @Entity 上面，而 @EntityGraph 配置在 Repository 的查询方法上面，我们看一下实例。
+（1）先在 Entity 里面定义 @NamedEntityGraph，其他都不变，其中 @NamedAttributeNode 可以有多个，也可以有一个。
+```
+@NamedEntityGraph(name = "UserInfoEntity.addressEntityList", attributeNodes = {
+      @NamedAttributeNode("addressEntityList"),
+      @NamedAttributeNode("userBlogEntityList")})
+@Entity(name = "UserInfoEntity")
+@Table(name = "user_info", schema = "test")
+public class UserInfoEntity  implements Serializable {
+   @Id
+   @Column(name = "id", nullable = false)
+   private Integer id;
+   @OneToOne(optional = false)
+   @JoinColumn(referencedColumnName = "id",name = "address_id",nullable = false)
+   private UserReceivingAddressEntity addressEntityList;
+   @OneToMany
+   @JoinColumn(name = "create_user_id",referencedColumnName = "id")
+   private List<UserBlogEntity> userBlogEntityList;
+......
+}
+```
+（2）只需要在查询方法上加 @EntityGraph 注解即可，其中 value 就是 @NamedEntityGraph 中的 Name，在实例配置如下：
+```
+public interface UserRepository extends JpaRepository<UserInfoEntity, Integer>{
+   @Override
+   @EntityGraph(value = "UserInfoEntity.addressEntityList")
+   List<UserInfoEntity> findAll();
+}
+```
+
+### 工作中关于关系查询踩过的那些坑
+#### 实体里面的注解要么在 get 方法上，要么全在字段上面
+所有的注解要么全配置在字段上，要么全配置在 get 方法上，不能混用，混用启动的时候就会启动不起来，然后启动的时候报错，如果是第一次使用很难找到原因，但是看语法上面这样配置又没有问题。而作者喜欢把注解都放在 get 方法上面，如下面的例子，因为 Intellij IDEA 工具生成的 Entity 类，相关的注解都在 get 方法上面，这样不需要做出任何调整，案例如下：
+```
+/**
+ * 看一下作者实际工作中发短信的Entity如下：
+ */
+@Entity
+@Table(name = "message_request")
+@Include(rootLevel = true, type = "messageRequest")
+@Setter
+@ToString
+public class MessageRequest extends DefaultSimpleAuditable {
+    public MessageRequest(String uuid) {
+        this.uuid = uuid;
+    }
+    public MessageRequest() {
+    }
+    /**
+     * 下面有哪些手机号
+     */
+    private List<MessageRequestTelephone> messageRequestTelephone = Lists.newArrayList();
+    /**
+     * uuid（自动产生） 流水号
+     */
+    private String uuid;
+    /**
+     * 短信内容，不包含签名，走模板，不用这个了
+     */
+    @Deprecated
+    private String content;
+    /**
+     * 哪个供应商，如果不指定，按照系统顺序发放
+     */
+    private String messageVendorCode;
+    /**
+     * 自己的模板code
+     */
+    private String templateCode;
+    /**
+     * abc,def,5模板参数，分割
+     */
+    private String templateParams;
+    /**
+     * 重试次数
+     */
+    private Integer retryTimes;
+    /**
+     * 【爱中国】，客户端传递的
+     */
+    private List<MessageRequestSign> messageRequestSigns;
+    /**
+     * 状态枚举
+     */
+    private MessageRequestStatus status;
+    /**
+     * 状态最后的异常
+     */
+    private String statusRemark;
+    @OneToMany(cascade = CascadeType.PERSIST)
+    @JoinColumn(referencedColumnName = "id", name = "message_request_id")
+    @JsonManagedReference
+    public List<MessageRequestSign> getMessageRequestSigns() {
+        return messageRequestSigns;
+    }
+    @Transient
+    @Exclude
+    @JsonIgnore
+    public String getDomesticSign() {
+        if (messageRequestSigns == null) {
+            return null;
+        }
+        List<MessageRequestSign> list = messageRequestSigns.stream().filter(s -> s.getNationCode().isDomestic()).collect(Collectors.toList());
+        if (list == null || list.isEmpty()) {
+            return null;
+        }
+        return list.stream().findFirst().get().getSign();
+    }
+    @Transient
+    @Exclude
+    @JsonIgnore
+    public String getAbroadSign() {
+        if (messageRequestSigns == null) {
+            return null;
+        }
+        List<MessageRequestSign> list = messageRequestSigns.stream().filter(s -> s.getNationCode().isAbroad()).collect(Collectors.toList());
+        if (list == null || list.isEmpty()) {
+            return null;
+        }
+        return list.stream().findFirst().get().getSign();
+    }
+    @OneToMany(cascade = CascadeType.PERSIST)
+    @JoinColumn(referencedColumnName = "id", name = "message_request_id")
+    @JsonManagedReference
+    public List<MessageRequestTelephone> getMessageRequestTelephone(){
+        return messageRequestTelephone;
+    }
+    @Basic
+    @Column(name = "uuid")
+    public String getUuid() {
+        return uuid;
+    }
+    @Basic
+    @Column(name = "content")
+    public String getContent() {
+        return content;
+    }
+    @Basic
+    @Column(name = "message_vendor_code")
+    public String getMessageVendorCode() {
+        return messageVendorCode;
+    }
+    @Basic
+    @Column(name = "template_code")
+    public String getTemplateCode() {
+        return templateCode;
+    }
+    @Basic
+    @Column(name = "template_params")
+    public String getTemplateParams() {
+        return templateParams;
+    }
+    //不加@Column注解，用默认的字段名字匹配规则
+    public Integer getRetryTimes() {
+        return retryTimes;
+    }
+    @Enumerated(value = EnumType.STRING)
+    public MessageRequestStatus getStatus() {
+        return status;
+    }
+    public String getStatusRemark() {
+        return statusRemark;
+    }
+    @PostLoad
+    public void postLoadDefaultValue() {
+        if (status == null) {
+            status = MessageRequestStatus.WAITING;
+        }
+    }
+}
+```
+
+### 双向关联死循环问题
+（1）JSON 序列化的双向关联会死循环，解决方法有两种：
+
+- 利用 @JsonIgnore 在另外一方忽略掉（最简单，但是不推荐，这样会改变业务场景）。
+- 利用 @JsonManagedReference 和 @JsonBackReference 注解来表明 back 关系，来解决 Jack Son 序列化的时候所产生的双向关联死循环。
+
+@JsonBackReference 和 @JsonManagedReference：这两个标注通常配对使用，通常用在父子关系中。@JsonBackReference 标注的属性在序列化（serialization，即将对象转换为 JSON 数据）时，会被忽略（即结果中的 JSON 数据不包含该属性的内容）。@JsonManagedReference 标注的属性则会被序列化。在序列化时，@JsonBackReference 的作用相当于 @JsonIgnore，此时可以没有 @JsonManagedReference，但在反序列化（deserialization，即 JSON 数据转换为对象）时，如果没有 @JsonManagedReference，则不会自动注入 @JsonBackReference 标注的属性（被忽略的父或子）；如果有 @JsonManagedReference，则会自动注入自动注入 @JsonBackReference 标注的属性。
+
+正如上面的 MessageRequest 类中描述一样，我们来开看一下 MessageRequestTelephone 的关键源码如下：
+```
+@Entity
+@Table(name = "message_request_telephone")
+@ToString(exclude = "messageRequest")
+public class MessageRequestTelephone extends DefaultSimpleAuditable implements Serializable {
+    /**
+     * 当我们使用messageRequestId的时候，对应的@JoinColumn要注意配置insertable = false, updatable = false
+     */
+    private Long messageRequestId;
+    @JsonBackReference
+    @ManyToOne
+    @JoinColumn(name = "message_request_id", referencedColumnName = "id", nullable = false, insertable = false, updatable = false)
+    public MessageRequest getMessageRequest() {
+        return messageRequest;
+    }
+......
+}
+```
+（2）同样的当覆盖 toString() 方法的时候需要注意一下，也会有双向关联死循环的问题。解决方法一样的，toString 的时候在一方排除掉即可。
+
+
+### 外键与关联关系注解的问题
+（1）虽然我们使用关联查询，但是在实际工作中，所有的关联查询，表上一般是不需要建立外键约束的，为了提高操作效率，但是每个外键的字段上都会加上一般索引。
+
+（2）不同的关联关系的配置，@JoinClumn 里面的（name、referencedColumnName）代表的意思是不一样的，很容易弄混。我们有两种方法应对：
+
+> 打印出 SQL，我们请求的时候看一下 SQL 正确不正确，一般配置如下，key 在 spring 里面，将 SQL 参数都打印出来观察仔细。
+```
+spring.jpa.show-sql=true
+spring.jpa.properties.hibernate.use_sql_comments=true
+spring.jpa.properties.hibernate.format_sql=true
+spring.jpa.properties.hibernate.type=trace
+logging.level.org.hibernate.type.descriptor.sql=trace
+```
+
+> 我们现在表上建立外键约束，然后利用 Intellij IDEA 自动生成关联关系注解，当生成完代码的时候再把表上的外键约束删除掉，操作界面如下： ...
+
+### 级联操作的使用需要注意
+当我们使用关联操作的时候建议大家 cascade = CascadeType.PERSIST 配置成这个，这样 insert 的时候能帮我们不少忙，它的原理是两条都先 insert，然后再来个 update 把关联关系更新上去，读者自己打印出 SQL，也可以看得出来。如下：
+```
+@OneToMany(cascade = CascadeType.PERSIST)
+    @JoinColumn(referencedColumnName = "id", name = "message_request_id")
+    @JsonManagedReference
+    public List<MessageRequestTelephone> getMessageRequestTelephone() {
+        return messageRequestTelephone;
+    }
+	
+```
+级联更新、级联删除的时候比较危险，建议考虑清楚，或者完全掌握的时候再去使用，否则生产产生事故还是比较糟糕的。
+
 
 
 
