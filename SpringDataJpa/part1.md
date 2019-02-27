@@ -116,11 +116,141 @@ List<User> findTop10ByLastname(String lastname, Pageable pageable);
 查询方法的结果可以通过关键字来限制 first 或 top，其可以被可互换使用，可选的数值可以追加到顶部/第一个以指定要返回的最大结果的大小。如果数字被省略，则假设结果大小为 1，限制表达式也支持 Distinct 关键字。此外，对于将结果集限制为一个实例的查询，支持将结果包装到一个实例中 Optional。如果将分页或切片应用于限制查询分页（以及可用页数的计算），则在限制结果中应用。
 
 
+#### 查询结果的不同形式（List/Stream/Page/Future）
+Page 和 List 在上面的案例中都有涉及下面将介绍的几种特殊的方式。
+
+##### 流式查询结果
+可以通过使用 Java 8 Stream 作为返回类型来逐步处理查询方法的结果，而不是简单地将查询结果包装在 Stream 数据存储中，特定的方法用于执行流。
+
+示例：使用 Java 8 流式传输查询的结果 Stream。
+```
+@Query("select u from User u")
+Stream<User> findAllByCustomQueryAndStream();
+Stream<User> findAllByFirstnameNotNull();
+@Query("select u from User u")
+Stream<User> streamAllPaged(Pageable pageable);
+```
+注意：流的关闭问题，try cache 是一种用关闭方法。
+```
+Stream<User> stream;
+try {
+   stream = repository.findAllByCustomQueryAndStream()
+   stream.forEach(…);
+} catch (Exception e) {
+   e.printStackTrace();
+} finally {
+   if (stream!=null){
+      stream.close();
+   }
+}
+```
+
+##### 异步查询结果
+可以使用 Spring 的异步方法执行功能异步执行存储库查询，这意味着方法将在调用时立即返回，并且实际的查询执行将发生在已提交给 Spring TaskExecutor 的任务中，比较适合定时任务的实际场景。
+```
+//使用 java.util.concurrent.Future 的返回类型。
+@Async
+Future<User> findByFirstname(String firstname);(1)
+//使用 java.util.concurrent.CompletableFuture 作为返回类型。
+@Async
+CompletableFuture<User> findOneByFirstname(String firstname); (2)
+//使用 org.springframework.util.concurrent.ListenableFuture 作为返回类型。
+@Async
+ListenableFuture<User> findOneByLastname(String lastname);(3)
+```
 
 
+### Projections 对查询结果的扩展
+Spring JPA 对 Projections 的扩展的支持，个人觉得这是个非常好的东西，从字面意思上理解就是映射，指的是和 DB 的查询结果的字段映射关系。一般情况下，我们是返回的字段和 DB 的查询结果的字段是一一对应的，但有的时候，需要返回一些指定的字段，不需要全部返回，或者返回一些复合型的字段，还得自己写逻辑。Spring Data 正是考虑到了这一点，允许对专用返回类型进行建模，以便更有选择地将部分视图对象。
+假设 Person 是一个正常的实体，和数据表 Person 一一对应，我们正常的写法如下：
+```
+@Entity
+class Person {
+   @Id
+   UUID id;
+   String firstname, lastname;
+   Address address;
+   @Entity
+   static class Address {
+      String zipCode, city, street;
+   }
+}
+interface PersonRepository extends Repository<Person, UUID> {
+   Collection<Person> findByLastname(String lastname);
+}
+```
+（1）但是我们想仅仅返回其中的 name 相关的字段，应该怎么做呢？如果基于 projections 的思路，其实是比较容易的。只需要声明一个接口，包含我们要返回的属性的方法即可。如下：
+```
+interface NamesOnly {
+  String getFirstname();
+  String getLastname();
+}
+```
+Repository 里面的写法如下，直接用这个对象接收结果即可，如下：
+```
+interface PersonRepository extends Repository<Person, UUID> {
+  Collection<NamesOnly> findByLastname(String lastname);
+}
+```
+Ctroller 里面直接调用这个对象可以看看结果。原理是，底层会有动态代理机制为这个接口生产一个实现实体类，在运行时。
+（2）查询关联的子对象，一样的道理，如下：
+```
+interface PersonSummary {
+  String getFirstname();
+  String getLastname();
+  AddressSummary getAddress();
+  interface AddressSummary {
+    String getCity();
+  }
+}
+interface PersonRepository extends Repository<Person, UUID> {
+  Collection<PersonSummary> findByLastname(String lastname);
+}
+```
 
+（3）@Value 和 SPEL 也支持：
+```
+interface NamesOnly {
+  @Value("#{target.firstname + ' ' + target.lastname}")
+  String getFullName();
+  …
+}
+```
+PersonRepository 里面保持不变，这样会返回一个 firstname 和 lastname 相加的只有 fullName 的结果集合。
+（6）这时候有人会在想，只能用 interface 吗？dto 支持吗？也是可以的，也可以定义自己的 Dto 实体类，需要哪些字段我们直接在 Dto 类当中暴漏出来 get/set 属性即可，如下：
+```
+class NamesOnlyDto {
+  private final String firstname, lastname;
+//注意构造方法
+  NamesOnlyDto(String firstname, String lastname) {
+    this.firstname = firstname;
+    this.lastname = lastname;
+  }
+  String getFirstname() {
+    return this.firstname;
+  }
+  String getLastname() {
+    return this.lastname;
+  }
+}
+```
 
+（7）支持动态 Projections，想通过泛化，根据不同的业务情况，返回不通的字段集合。
 
+PersonRepository做一定的变化，如下：
+interface PersonRepository extends Repository<Person, UUID> {
+  Collection<T> findByLastname(String lastname, Class<T> type);
+}
+我们的调用方，就可以通过 class 类型动态指定返回不同字段的结果集合了，如下：
+```
+void someMethod(PersonRepository people) {
+//我想包含全字段，就直接用原始entity（Person.class）接收即可
+  Collection<Person> aggregates = people.findByLastname("Matthews", Person.class);
+//如果我想仅仅返回名称，我只需要指定Dto即可。
+  Collection<NamesOnlyDto> aggregates = people.findByLastname("Matthews", NamesOnlyDto.class);
+}
+```
+Projections 的应用场景还是挺多的，望大家好好体会，这样可以实现更优雅的代码，去实现不同的场景。**不必要用数组，冗余的对象去接收查询结果。**
 
 
 
