@@ -286,19 +286,372 @@ interface PersonRepository extends MyRepositoryImpl<Person, Long>{
 #### 2. 当有业务场景要覆盖 SimpleJpaRepository 默认实现的时候
 这种一般是具体情况具体分析的，一般实现特殊化的自定义 Respository 即可。
 
+#### 3. UUID 与 ID 的情况
+经常在实际生产中会有这样的场景，对外暴露的是 UUID 查询方法，而对内呢暴露的是 Long 类型的 ID，这时候我们就可以自定义一个 FindByIDOrUUID 的底层实现方法，在自定义的 Respository 接口里面。
 
+#### 4. 使用 Querydsl
+Spring Data JPA 里面还帮我们做了 QuerydslJpaRepository 用来支持 Querydsl 的查询方法，当我们引入 Querydsl 的时候 Spring 就会自动帮我们把 SimpleJpaRepository 的实现切换到 QuerydslJpaRepository 的实现。
 
+#### 5. 动态查询条件
+由于 Data JPA 里面的 query method 或者 @query 注解不支持动态查询条件，正常情况下将动态条件写在 manager 或者 service 里面。这个时候如果是针对资源的操作，并且和业务无关的查询的时候可以放在自定义 Repository 里面（有个缺点就是不能使用 SimpleJpaRepository，里面的很多优秀的默认是实现方法，在实际工作中还是放在 service 和 manager 中多一些，只是给大家举个例子，知道有这么回事就行）。实例如下：
+```
+//我们假设要根据条件动态查询订单
+public interface OrderRepositoryCustom {
+    Page<Order> findAllByCriteria(OrderCriteria criteria); // 定义一个订单的定制化Repository查询方法，当然实际生产过程中，这里面可能不止一个方法。
+}
+```
+```
+public class OrderRepositoryImpl implements OrderRepositoryCustom { 
+    @PersistenceContext
+    EntityManager entityManager; 
+    /**
+    * 一个动态条件的查询方法
+    */
+    public List<Order> findAllByCriteria(OrderCriteria criteria) {
+        // 查询条件列表
+        final List<String> andConditions = new ArrayList<String>();
+        final Map<String, Object> bindParameters = new HashMap<String, Object>();
+        // 动态绑定参数和要查询的条件
+        if (criteria.getId() != null) {
+            andConditions.add("o.id = :id");
+            bindParameters.put("id", criteria.getId());
+        }
+        if (!CollectionUtils.isEmpty(criteria.getStatusCodes())) {
+            andConditions.add("o.status.code IN :statusCodes");
+            bindParameters.put("statusCodes", criteria.getStatusCodes());
+        }
+        if (andConditions.isEmpty()) {
+            return Collections.emptyList();
+        }
+        // 动态创建query
+        final StringBuilder queryString = new StringBuilder();
+        queryString.append("SELECT o FROM Order o");
+        // 动态拼装条件
+        Iterator<String> andConditionsIt = andConditions.iterator();
+        if (andConditionsIt.hasNext()) {
+            queryString.append(" WHERE ").append(andConditionsIt.next());
+        }
+        while (andConditionsIt.hasNext()) {
+            queryString.append(" AND ").append(andConditionsIt.next());
+        }
+        // 添加排序
+        queryString.append(" ORDER BY o.id");
+        // 创建 typed query.
+        final TypedQuery<Order> findQuery = entityManager.createQuery(
+                queryString.toString(), Order.class);
+        // 绑定参数
+        for (Map.Entry<String, Object> bindParameter : bindParameters
+                .entrySet()) {
+            findQuery.setParameter(bindParameter.getKey(), bindParameter
+                    .getValue());
+        }
+        //返回查询，结果。
+        return findQuery.getResultList();
+    }
+}
+//实际中此种就比较少用了，大家知道有这么回事，真是遇到特殊场景必须要用了，可以用此方法实现。
 
+```
 
+#### 6. 扩展 JpaSpecificationExecutor 使其更加优雅
+当我们动态查询的时候经常会出现下面的代码逻辑，写起来老是感觉有点不是特别优雅，且有点重复的感觉：
+```
+PageRequest pr = new PageRequest(page - 1, rows, Direction.DESC, "id");
+    Page pageData = memberDao.findAll(new Specification() {
+        @Override
+        public Predicate toPredicate(Root root, CriteriaQuery query, CriteriaBuilder cb) {
+            List<Predicate> predicates = new ArrayList<>();
+            if (isNotEmpty(userName)) {
+                predicates.add(cb.like(root.get("userName"), "%" + userName + "%"));
+            }
+            if (isNotEmpty(realName)) {
+                predicates.add(cb.like(root.get("realName"), "%" + realName + "%"));
+            }
+            if (isNotEmpty(telephone)) {
+                predicates.add(cb.equal(root.get("userName"), telephone));
+            }
+            query.where(predicates.toArray(new Predicate[0]));
+            return null;
+        }
+    }, pr);
+```
 
+使用了自定义的复杂查询，我们可以做到如下效果：
+```
+Page pageData = userDao.findAll(new MySpecification<User>().and(
+        Cnd.like("userName", userName),
+        Cnd.like("realName", realName),
+        Cnd.eq("telephone", telephone)
+).asc("id"), pr);
+```
+如果对 Spring MVC 比较熟悉的话，可以更进一步把其查询提交和规则直接封装到 HandlerMethodArgumentResolver 里面，把参数自动和规则匹配起来。
 
+我们可以对如下代码进行参考，感觉实现的还不错，此段代码可以作参考，只是实现的还有点不完整，如下：
+```
+/**
+ * 扩展Specification
+ * @param <T>
+ */
+public class MySpecification<T> implements Specification<T> {
+    /**
+     * 属性分隔符
+     */
+    private static final String PROPERTY_SEPARATOR = ".";
+    /**
+     * and条件组
+     */
+    List<Cnd> andConditions = new ArrayList<>();
+    /**
+     * or条件组
+     */
+    List<Cnd> orConditions = new ArrayList<>();
+    /**
+     * 排序条件组
+     */
+    List<Order> orders = new ArrayList<>();
+    @Override
+    public Predicate toPredicate(Root<T> root, CriteriaQuery<?> cq, CriteriaBuilder cb) {
+        Predicate restrictions = cb.and(getAndPredicates(root, cb));
+        restrictions = cb.and(restrictions, getOrPredicates(root, cb));
+        cq.orderBy(getOrders(root, cb));
+        return restrictions;
+    }
+    public MySpecification and(Cnd... conditions) {
+        for (Cnd condition : conditions) {
+            andConditions.add(condition);
+        }
+        return this;
+    }
+    public MySpecification or(Collection<Cnd> conditions) {
+        orConditions.addAll(conditions);
+        return this;
+    }
+    public MySpecification desc(String property) {
+        this.orders.add(Order.desc(property));
+        return this;
+    }
+    public MySpecification asc(String property) {
+        this.orders.add(Order.asc(property));
+        return this;
+    }
+    private Predicate getAndPredicates(Root<T> root, CriteriaBuilder cb) {
+        Predicate restrictions = cb.conjunction();
+        for (Cnd condition : andConditions) {
+            if (condition == null) {
+                continue;
+            }
+            Path<?> path = this.getPath(root, condition.property);
+            if (path == null) {
+                continue;
+            }
+            switch (condition.operator) {
+                case eq:
+                    if (condition.value != null) {
+                        if (String.class.isAssignableFrom(path.getJavaType()) && condition.value instanceof String) {
+                            if (!((String) condition.value).isEmpty()) {
+                                restrictions = cb.and(restrictions, cb.equal(path, condition.value));
+                            }
+                        } else {
+                            restrictions = cb.and(restrictions, cb.equal(path, condition.value));
+                        }
+                    }
+                    break;
+                case ge:
+                    if (Number.class.isAssignableFrom(path.getJavaType()) && condition.value instanceof Number) {
+                        restrictions = cb.and(restrictions, cb.ge((Path<Number>) path, (Number) condition.value));
+                    }
+                    break;
+                case gt:
+                    if (Number.class.isAssignableFrom(path.getJavaType()) && condition.value instanceof Number) {
+                        restrictions = cb.and(restrictions, cb.gt((Path<Number>) path, (Number) condition.value));
+                    }
+                    break;
+                case lt:
+                    if (Number.class.isAssignableFrom(path.getJavaType()) && condition.value instanceof Number) {
+                        restrictions = cb.and(restrictions, cb.lt((Path<Number>) path, (Number) condition.value));
+                    }
+                    break;
+                case ne:
+                    if (condition.value != null) {
+                        if (String.class.isAssignableFrom(path.getJavaType()) && condition.value instanceof String && !((String) condition.value).isEmpty()) {
+                            restrictions = cb.and(restrictions, cb.notEqual(path, condition.value));
+                        } else {
+                            restrictions = cb.and(restrictions, cb.notEqual(path, condition.value));
+                        }
+                    }
+                    break;
+                case isNotNull:
+                    restrictions = cb.and(restrictions, path.isNotNull());
+                    break;
+            }
+        }
+        return restrictions;
+    }
+    private Predicate getOrPredicates(Root<T> root, CriteriaBuilder cb) {
+        // 相同的逻辑 Need TODO
+        return null;
+    }
+    private List<javax.persistence.criteria.Order> getOrders(Root<T> root, CriteriaBuilder cb) {
+        List<javax.persistence.criteria.Order> orderList = new ArrayList<>();
+        if (root == null || CollectionUtils.isEmpty(orders)) {
+            return orderList;
+        }
+        for (Order order : orders) {
+            if (order == null) {
+                continue;
+            }
+            String property = order.getProperty();
+            Sort.Direction direction = order.getDirection();
+            Path<?> path = this.getPath(root, property);
+            if (path == null || direction == null) {
+                continue;
+            }
+            switch (direction) {
+                case ASC:
+                    orderList.add(cb.asc(path));
+                    break;
+                case DESC:
+                    orderList.add(cb.desc(path));
+                    break;
+            }
+        }
+        return orderList;
+    }
+    /**
+     * 获取Path
+     *
+     * @param path         Path
+     * @param propertyPath 属性路径
+     * @return Path
+     */
+    private <X> Path<X> getPath(Path<?> path, String propertyPath) {
+        if (path == null || StringUtils.isEmpty(propertyPath)) {
+            return (Path<X>) path;
+        }
+        String property = StringUtils.substringBefore(propertyPath, PROPERTY_SEPARATOR);
+        return getPath(path.get(property), StringUtils.substringAfter(propertyPath, PROPERTY_SEPARATOR));
+    }
+    /**
+     * 条件
+     */
+    public static class Cnd {
+        Operator operator;
+        String property;
+        Object value;
+        public Cnd(String property, Operator operator, Object value) {
+            this.operator = operator;
+            this.property = property;
+            this.value = value;
+        }
+        /**
+         * 相等
+         *
+         * @param property
+         * @param value
+         * @return
+         */
+        public static Cnd eq(String property, Object value) {
+            return new Cnd(property, Operator.eq, value);
+        }
+        /**
+         * 不相等
+         *
+         * @param property
+         * @param value
+         * @return
+         */
+        public static Cnd ne(String property, Object value) {
+            return new Cnd(property, Operator.ne, value);
+        }
+    }
+    /**
+     * 排序
+     */
+    @Getter
+    @Setter
+    public static class Order {
+        private String property;
+        private Sort.Direction direction = Sort.Direction.ASC;
+        /**
+         * 构造方法
+         *
+         * @param property  属性
+         * @param direction 方向
+         */
+        public Order(String property, Sort.Direction direction) {
+            this.property = property;
+            this.direction = direction;
+        }
+        /**
+         * 返回递增排序
+         *
+         * @param property 属性
+         * @return 递增排序
+         */
+        public static Order asc(String property) {
+            return new Order(property, Sort.Direction.ASC);
+        }
+        /**
+         * 返回递减排序
+         *
+         * @param property 属性
+         * @return 递减排序
+         */
+        public static Order desc(String property) {
+            return new Order(property, Sort.Direction.DESC);
+        }
+    }
+    /**
+     * 运算符
+     */
+    @Getter
+    @Setter
+    public enum Operator {
+        /**
+         * 等于
+         */
+        eq(" = "),
+        /**
+         * 不等于
+         */
+        ne(" != "),
+        /**
+         * 大于
+         */
+        gt(" > "),
+        /**
+         * 小于
+         */
+        lt(" < "),
+        /**
+         * 大于等于
+         */
+        ge(" >= "), 
+        /**
+         * 不为Null
+         */
+        isNotNull(" is not NULL ");
+        Operator(String operator) {
+            this.operator = operator;
+        }
+        private String operator;
+    }
+}
+```
 
+#### 7. 与之类似的解决方案还有 RSQL 的解决方案，可以参考Git_Hub上的此开源项目。
+RSQL（RESTful Service Query Language）是 Feed Item Query Language (FIQL) 的超集，是一种 RESTful 服务的查询语言。这里我们使用 rsql-jpa 来实践，它依赖 rsql-parser 来解析 RSQL 语法，然后将解析后的 RSQL 转义到 JPA 的 Specification。
 
-
-
-
-
-
+maven 的地址如下：
+```
+<dependency>
+    <groupId>com.github.tennaito</groupId>
+    <artifactId>rsql-jpa</artifactId>
+    <version>2.0.2</version>
+</dependency>
+```
+GitHub 文档地址，详见这里(https://github.com/tennaito/rsql-jpa )。
+如果要立志做优秀的架构师，Spring Data JPA 的实现还是非常好的，包括开源的生态等也非常好。
 
 
 
