@@ -50,6 +50,74 @@
 
 老年代的特点是每次垃圾收集时只有少量对象需要被回收，而新生代的特点是每次垃圾回收时都有大量的对象需要被回收，那么就可以根据不同代的特点采取最适合的收集算法。
 
+#### 1.8 什么是双亲委派模式？有什么作用？
+基本定义： 双亲委派模型的工作流程是：如果一个类加载器收到了类加载的请求，它首先不会自己去加载这个类，而是把请求委托给父加载器去完成，依次向上，因此，所有的类加载请求最终都应该被传递到顶层的启动类加载器中，只有当父加载器没有找到所需的类时，子加载器才会尝试去加载该类。
+
+**双亲委派机制:
+
+- 当 AppClassLoader 加载一个 class 时，它首先不会自己去尝试加载这个类，而是把类加载请求委派给父类加载器 ExtClassLoader 去完成。
+
+- 当 ExtClassLoader 加载一个 class 时，它首先也不会自己去尝试加载这个类，而是把类加载请求委派给 BootStrapClassLoader 去完成。
+
+- 如果 BootStrapClassLoader 加载失败，会使用 ExtClassLoader 来尝试加载；
+
+- 若 ExtClassLoader 也加载失败，则会使用 AppClassLoader 来加载，如果 AppClassLoader 也加载失败，则会报出异常 ClassNotFoundException。
+
+**双亲委派作用：**
+
+- 通过带有优先级的层级关可以避免类的重复加载；
+- 保证 Java 程序安全稳定运行，Java 核心 API 定义类型不会被随意替换。
+
+
+#### 2.2 JVM 数据运行区，哪些会造成 OOM 的情况？
+除了数据运行区，其他区域均有可能造成 OOM 的情况。
+
+堆溢出：java.lang.OutOfMemoryError: Java heap space
+栈溢出：java.lang.StackOverflowError
+永久代溢出：java.lang.OutOfMemoryError: PermGen space
+
+#### 2.5 线上常用的 JVM 参数有哪些？
+**数据区设置**
+```
+Xms：初始堆大小
+Xmx：最大堆大小
+Xss:Java 每个线程的Stack大小
+XX:NewSize=n：设置年轻代大小
+XX:NewRatio=n：设置年轻代和年老代的比值。如：为 3，表示年轻代与年老代比值为 1:3，年轻代占整个年轻代年老代和的 1/4。
+XX：SurvivorRatio=n：年轻代中 Eden 区与两个 Survivor 区的比值。注意 Survivor 区有两个。如：3，表示 Eden：Survivor=3：2，一个 Survivor 区占整个年轻代的 1/5。
+XX：MaxPermSize=n：设置持久代大小。
+```
+
+**收集器设置**
+```
+XX:+UseSerialGC：设置串行收集器
+XX:+UseParallelGC:：设置并行收集器
+XX:+UseParalledlOldGC：设置并行年老代收集器
+XX:+UseConcMarkSweepGC：设置并发收集器
+```
+**GC日志打印设置**
+```
+XX:+PrintGC：打印 GC 的简要信息
+XX:+PrintGCDetails：打印 GC 详细信息
+XX:+PrintGCTimeStamps：输出 GC 的时间戳
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
