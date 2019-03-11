@@ -102,6 +102,71 @@ XX:+PrintGCDetails：打印 GC 详细信息
 XX:+PrintGCTimeStamps：输出 GC 的时间戳
 ```
 
+#### 2.8 引起类加载操作的行为有哪些？
+- 遇到 new、getstatic、putstatic 或 invokestatic 这四条字节码指令。
+- 反射调用的时候，如果类没有进行过初始化，则需要先触发其初始化。
+- 子类初始化的时候，如果其父类还没初始化，则需先触发其父类的初始化。
+- 虚拟机执行主类的时候（有 main（ string[] args））。
+- JDK1.7 动态语言支持。
+
+
+#### 2.9 介绍一下 JVM 提供的常用工具
+jps：用来显示本地的 Java 进程，可以查看本地运行着几个 Java 程序，并显示他们的进程号。 命令格式：jps
+
+jinfo：运行环境参数：Java System 属性和 JVM 命令行参数，Java class path 等信息。 命令格式：jinfo 进程 pid
+
+jstat：监视虚拟机各种运行状态信息的命令行工具。 命令格式：jstat -gc 123 250 20
+
+jstack：可以观察到 JVM 中当前所有线程的运行情况和线程当前状态。 命令格式：jstack 进程 pid
+
+jmap：观察运行中的 JVM 物理内存的占用情况（如：产生哪些对象，及其数量）。 命令格式：jmap [option] pid
+
+
+#### 2.10 Full GC 、 Major GC 、Minor GC 之间区别？
+Minor GC： 从新生代空间（包括 Eden 和 Survivor 区域）回收内存被称为 Minor GC。
+
+Major GC： 清理 Tenured 区，用于回收老年代，出现 Major GC 通常会出现至少一次 Minor GC。
+
+Full GC： Full GC 是针对整个新生代、老年代、元空间（metaspace，java8 以上版本取代 perm gen）的全局范围的 GC。
+
+
+#### 2.11 什么时候触发 Full GC ？
+- 调用 System.gc 时，系统建议执行 Full GC，但是不必然执行。
+- 老年代空间不足。
+- 方法区空间不足。
+- 通过 Minor GC 后进入老年代的平均大小大于老年代的可用内存。
+- 由 Eden 区、survivor space1（From Space）区向 survivor space2（To Space）区复制时，对象大小大于 To Space 可用内存，则把该对象转存到老年代，且老年代的可用内存小于该对象大小。
+
+#### 2.12 什么情况下会出现栈溢出
+- 方法创建了一个很大的对象，如 List，Array。
+- 是否产生了循环调用、死循环。
+- 是否引用了较大的全局变量。
+
+#### 2.13 说一下强引用、软引用、弱引用、虚引用以及他们之间和 gc 的关系
+- 强引用：new 出的对象之类的引用，只要强引用还在，永远不会回收。
+- 软引用：引用但非必须的对象，内存溢出异常之前，回收。
+- 弱引用：非必须的对象，对象能生存到下一次垃圾收集发生之前。
+- 虚引用：对生存时间无影响，在垃圾回收时得到通知。
+
+
+### 实战
+####  3.1 CPU 资源占用过高
+- top 查看当前 CPU 情况，找到占用 CPU 过高的进程 PID=123。
+- top -H -p123 找出两个 CPU 占用较高的线程，记录下来 PID=2345, 3456 转换为十六进制。
+- jstack -l 123 > temp.txt 打印出当前进程的线程栈。
+- 查找到对应于第二步的两个线程运行栈，分析代码。
+
+
+#### 3.2 OOM 异常排查
+- 使用 top 指令查询服务器系统状态。
+- ps -aux|grep java 找出当前 Java 进程的 PID。
+- jstat -gcutil pid interval 查看当前 GC 的状态。
+- jmap -histo:live pid 可用统计存活对象的分布情况，从高到低查看占据内存最多的对象。
+- jmap -dump:format=b,file= 文件名 [pid] 利用 Jmap dump。
+- 使用性能分析工具对上一步 dump 出来的文件进行分析，工具有 MAT 等。
+
+
+
 
 
 
