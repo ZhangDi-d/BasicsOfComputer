@@ -155,10 +155,86 @@ website 键的底层实现就是一个字典， 字典中包含了 10086 个键�
 
 
 #### 1.3.1 哈希算法
+Redis 选择了高效、实现简单的哈希表，作为字典的底层实现.
+dict.h/dict 给出了这个字典的定义：
+```
+/*
+ * 字典
+ *
+ * 每个字典使用两个哈希表，用于实现渐进式 rehash
+ */
+typedef struct dict {
 
+    // 特定于类型的处理函数
+    dictType *type;
 
+    // 类型处理函数的私有数据
+    void *privdata;
 
+    // 哈希表（2 个）
+    dictht ht[2];
 
+    // 记录 rehash 进度的标志，值为 -1 表示 rehash 未进行
+    int rehashidx;
+
+    // 当前正在运作的安全迭代器数量
+    int iterators;
+
+} dict;
+```
+注意 dict 类型使用了两个指针，分别指向两个哈希表。
+
+其中，0 号哈希表（ht[0]）是字典主要使用的哈希表，而 1 号哈希表（ht[1]）则只有在程序对 0 号哈希表进行 rehash 时才使用。
+
+##### 哈希表实现
+字典所使用的哈希表实现由 dict.h/dictht 类型定义：
+```
+/*
+ * 哈希表
+ */
+typedef struct dictht {
+
+    // 哈希表节点指针数组（俗称桶，bucket）
+    dictEntry **table;
+
+    // 指针数组的大小
+    unsigned long size;
+
+    // 指针数组的长度掩码，用于计算索引值
+    unsigned long sizemask;
+
+    // 哈希表现有的节点数量
+    unsigned long used;
+
+} dictht;
+```
+
+table 属性是个数组，数组的每个元素都是个指向 dictEntry 结构的指针。
+
+每个 dictEntry 都保存着一个键值对，以及一个指向另一个 dictEntry 结构的指针：
+```
+/*
+ * 哈希表节点
+ */
+typedef struct dictEntry {
+
+    // 键
+    void *key;
+
+    // 值
+    union {
+        void *val;
+        uint64_t u64;
+        int64_t s64;
+    } v;
+
+    // 链往后继节点
+    struct dictEntry *next;
+
+} dictEntry;
+```
+
+![在这里插入图片描述](https://box.kancloud.cn/2015-09-13_55f4effb4d520.svg)
 
 
 

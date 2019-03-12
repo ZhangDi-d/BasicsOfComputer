@@ -185,6 +185,132 @@ Person p=new Person(“张三”);
 
 
 
+## Java 核心基础
+15. 说说 & 和 && 的区别。
+
+& 和 && 都可以用作逻辑与的运算符，表示逻辑与（and），当运算符两边的表达式的结果都为 true 时，整个运算结果才为 true，否则，只要有一方为 false，则结果为 false。
+
+&& 还具有短路的功能，即如果第一个表达式为 false，则不再计算第二个表达式，例如，对于 if(str != null && !str.equals(“”)) 表达式，当 str 为 null 时，后面的表达式不会执行，所以不会出现 NullPointerException 如果将 && 改为 &，则会抛出 NullPointerException 异常。If(x==33 & ++y>0) y 会增长，If(x==33 && ++y>0) 不会增长。
+
+& 还可以用作位运算符，当 & 操作符两边的表达式不是 boolean 类型时，& 表示按位与操作，我们通常使用 0x0f 来与一个整数进行 & 运算，来获取该整数的最低 4 个 bit 位，例如，0x31 & 0x0f 的结果为 0x01。
+
+备注：这道题先说两者的共同点，再说出 && 和 & 的特殊之处，并列举一些经典的例子来表明自己理解透彻深入、实际经验丰富。	
+
+
+16. 值传递和引用传递。
+
+值传递是针对基本数据类型而言，传递的是值得副本，对副本的改变不会影响到原变量。
+
+引用传递就是将一个堆内存空间的使用权交给多个栈内存空间，每一个栈内存空间都可以对堆内存空间进行修改。
+
+17. char 型变量中能不能存贮一个中文汉字? 为什么?
+char 型变量是用来存储 Unicode 编码的字符的，unicode 编码字符集中包含了汉字，所以，char 型变量中当然可以存储汉字啦。不过，如果某个特殊的汉字没有被包含在 unicode 编码字符集中，那么，这个 char 型变量中就不能存储这个特殊汉字。补充说明：unicode 编码占用两个字节，所以，char 类型的变量也是占用两个字节。
+
+
+18. "==" 和 equals 方法究竟有什么区别？
+== 操作符专门用来比较两个变量的值是否相等，也就是用于比较变量所对应的内存中所存储的数值是否相同，要比较两个基本类型的数据或两个引用变量是否相等，只能用 == 操作符。
+
+如果一个变量指向的数据是对象类型的，那么，这时候涉及了两块内存，对象本身占用一块内存（堆内存），变量也占用一块内存，例如 Objet obj = new Object(); 变量 obj 是一个内存，new Object() 是另一个内存，此时，变量 obj 所对应的内存中存储的数值就是对象占用的那块内存的首地址。对于指向对象类型的变量，如果要比较两个变量是否指向同一个对象，即要看这两个变量所对应的内存中的数值是否相等，这时候就需要用 == 操作符进行比较。
+
+equals 方法是用于比较两个独立对象的内容是否相同，就好比去比较两个人的长相是否相同，它比较的两个对象是独立的。例如，对于下面的代码：
+```
+String a=new String("foo");
+String b=new String("foo");
+```
+两条 new 语句创建了两个对象，然后用 a,b 这两个变量分别指向了其中一个对象，这是两个不同的对象，它们的首地址是不同的，即 a 和 b 中存储的数值是不相同的，所以，表达式 a==b 将返回 false，而这两个对象中的内容是相同的，所以，表达式 a.equals(b) 将返回 true。
+
+
+19. Math.round(11.5) 等于多少? Math.round(-11.5) 等于多少?
+Math 类中提供了三个与取整有关的方法：ceil、floor、round，这些方法的作用与它们的英文名称的含义相对应，例如，ceil 的英文意义是天花板，该方法就表示向上取整，所以，Math.ceil(11.3)的结果为 12,Math.ceil(-11.3)的结果是 - 11；floor 的英文意义是地板，该方法就表示向下取整，所以，Math.floor(11.6)的结果为 11,Math.floor(-11.6)的结果是 - 12；最难掌握的是 round 方法，它表示 “四舍五入”，算法为 Math.floor(x+0.5)，即将原来的数字加上 0.5 后再向下取整，所以，Math.round(11.5) 的结果为 12，Math.round(-11.5)的结果为 - 11。
+
+20. 序列化接口的 id 有什么用？
+对象经常要通过 IO 进行传送，让你写程序传递对象，你会怎么做？把对象的状态数据用某种格式写入到硬盘，Person->“zxx,male,28,30000”àPerson，既然大家都要这么干，并且没有个统一的干法，于是，sun 公司就提出一种统一的解决方案，它会把对象变成某个格式进行输入和输出，这种格式对程序员来说是透明（transparent）的，但是，我们的某个类要想能被 sun 的这种方案处理，必须实现 Serializable 接口。
+
+ObjectOutputStream.writeObject(obj);
+Object obj = ObjectInputStream.readObject();
+假设两年前我保存了某个类的一个对象，这两年来，我修改该类，删除了某个属性和增加了另外一个属性，两年后，我又去读取那个保存的对象，或有什么结果？未知！sun 的 jdk 就会蒙了。为此，一个解决办法就是在类中增加版本后，每一次类的属性修改，都应该把版本号升级一下，这样，在读取时，比较存储对象时的版本号与当前类的版本号，如果不一致，则直接报版本号不同的错!
+
+21. abstract class 和 interface 有什么区别?
+含有 abstract 修饰符的 class 即为抽象类，abstract 类不能创建的实例对象。含有 abstract 方法的类必须定义为 abstract class，abstract class 类中的方法不必是抽象的。abstract class 类中定义抽象方法必须在具体 (Concrete) 子类中实现，所以，不能有抽象构造方法或抽象静态方法。如果的子类没有实现抽象父类中的所有抽象方法，那么子类也必须定义为 abstract 类型。
+
+接口（interface）可以说成是抽象类的一种特例，接口中的所有方法都必须是抽象的。接口中的方法定义默认为 public abstract 类型，接口中的成员变量类型默认为 public static final。
+下面比较一下两者的语法区别：
+
+- 抽象类可以有构造方法，接口中不能有构造方法。
+
+- 抽象类中可以有普通成员变量，接口中没有普通成员变量
+
+- 抽象类中可以包含非抽象的普通方法，接口中的所有方法必须都是抽象的，不能有非抽象的普通方法。
+
+- 抽象类中的抽象方法的访问类型可以是 public，protected 和（默认类型, 虽然 eclipse 下不报错，但应该也不行），但接口中的抽象方法只能是 public 类型的，并且默认即为 public abstract 类型。
+
+- 抽象类中可以包含静态方法，接口中不能包含静态方法
+
+- 抽象类和接口中都可以包含静态成员变量，抽象类中的静态成员变量的访问类型可以任意，但接口中定义的变量只能是 public static final 类型，并且默认即为 public static final 类型。
+
+- 一个类可以实现多个接口，但只能继承一个抽象类。
+下面接着再说说两者在应用上的区别：**
+
+接口更多的是在系统架构设计方法发挥作用，主要用于定义模块之间的通信契约。而抽象类在代码实现方面发挥作用，可以实现代码的重用，例如，模板方法设计模式是抽象类的一个典型应用，假设某个项目的所有 Servlet 类都要用相同的方式进行权限判断、记录访问日志和处理异常，那么就可以定义一个抽象的基类，让所有的 Servlet 都继承这个抽象基类，在抽象基类的 service 方法中完成权限判断、记录访问日志和处理异常的代码，在各个子类中只是完成各自的业务逻辑代码，伪代码如下：
+```
+public abstract class BaseServlet extends HttpServlet{
+    public final void service(HttpServletRequest request, HttpServletResponse response) throws IOExcetion,ServletException{
+        //记录访问日志
+        //进行权限判断
+        if(具有权限){
+            try {
+              doService(request,response);
+            }catch(Excetpion e){
+              //记录异常信息
+            }
+      }   
+  } 
+  protected abstract void doService(HttpServletRequest request, HttpServletResponse response) throws IOExcetion,ServletException;  
+  //注意访问权限定义成protected，显得既专业，又严谨，因为它是专门给子类用的
+}
+
+public class MyServlet1 extends BaseServlet{
+    protected void doService(HttpServletRequest request, HttpServletResponse response) throws IOExcetion,ServletException{
+    //本Servlet只处理的具体业务逻辑代码
+    } 
+}
+```
+
+
+22.  Java 中的异常处理机制的简单原理和应用。
+
+异常是指 java 程序运行时（非编译）所发生的非正常情况或错误，与现实生活中的事件很相似，现实生活中的事件可以包含事件发生的时间、地点、人物、情节等信息，可以用一个对象来表示，Java 使用面向对象的方式来处理异常，它把程序中发生的每个异常也都分别封装到一个对象来表示的，该对象中包含有异常的信息。
+
+Java 对异常进行了分类，不同类型的异常分别用不同的 Java 类表示，所有异常的根类为 java.lang.Throwable，Throwable 下面又派生了两个子类：Error 和 Exception，Error 表示应用程序本身无法克服和恢复的一种严重问题，程序只有死的份了，例如，说内存溢出和线程死锁等系统问题。Exception 表示程序还能够克服和恢复的问题，其中又分为系统异常和普通异常，系统异常是软件本身缺陷所导致的问题，也就是软件开发人员考虑不周所导致的问题，软件使用者无法克服和恢复这种问题，但在这种问题下还可以让软件系统继续运行或者让软件死掉，例如，数组脚本越界（ArrayIndexOutOfBoundsException），空指针异常（NullPointerException）、类转换异常（ClassCastException）；普通异常是运行环境的变化或异常所导致的问题，是用户能够克服的问题，例如，网络断线，硬盘空间不够，发生这样的异常后，程序不应该死掉。
+
+Java 为系统异常和普通异常提供了不同的解决方案，编译器强制普通异常必须 try..catch 处理或用 throws 声明继续抛给上层调用方法处理，所以普通异常也称为 checked 异常，而系统异常可以处理也可以不处理，所以，编译器不强制用 try..catch 处理或用 throws 声明，所以系统异常也称为 unchecked 异常。
+
+提示答题者：就按照三个级别去思考：虚拟机必须宕机的错误，程序可以死掉也可以不死掉的错误，程序不应该死掉的错误。
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
