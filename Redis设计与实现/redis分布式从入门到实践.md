@@ -195,5 +195,93 @@ AOF 重写配置包含两个配置命令，如下。
 auto-aof-rewrite-min-size	AOF 文件重写最小的尺寸
 auto-aof-rewrite-percentage	AOF 文件增长率
 ```
+auto-aof-rewrite-min-size 表示配置最小尺寸，超过这个尺寸就进行重写。
+
+auto-aof-rewrite-percentage ，这里说的是 AOF 文件增长比例，指当前 AOF 文件比上次重写的增长比例大小。AOF 重写即 AOF 文件在一定大小之后，重新将整个内存写到 AOF 文件当中，以反映最新的状态（相当于 bgsave）。这样就避免了 AOF 文件过大而实际内存数据小的问题（频繁修改数据问题）。
+
+
+
+接下来看下统计配置，如下表所示，有了它，就可以对上面的配置命令进行控制。
+
+|配置名	|含义|
+|--|--|
+|aof-current-size	|AOF 当前尺寸（字节）|
+|aof-base-size	|AOF 上一次启动和重写的尺寸（字节）|
+
+![在这里插入图片描述](http://images.gitbook.cn/fbf5bcb0-fb2f-11e7-8c30-4fe386329305)
+
+由上图可知，bgrewriteaof 命令发出后，Redis 会在父进程中 fork 一个子进程，同时父进程会分别对旧的 AOF 文件和新的 AOF 文件发出 aof_buf 和 aof_rewrite_buf 命令，同时子进程写入新的 AOF 文件，并通知父进程，最后 Redis 使用 aof_rewrite_buf 命令写入新的 AOF 文件。
+
+实际配置过程如下。
+```
+appendonly yes // appendonly 
+ 默认是 no
+appendfilename "append only - ${port}.aof" //设置 AOF 名字
+appendfsync everysec // 每秒同步
+dir /diskpath // 新建一个目录
+no-appendfsync-on-rewrite yes // 为了减少磁盘压力，AOF 性能上需要权衡。默认是 no，不会丢
+```
+
+
+#### 5.4 Redis 持久化开发运维时遇到的问题
+问题可总结为四种，即 fork 操作、进程外的开销和优化、AOF 追加阻塞和单机多实例部署。
+
+1. fork 操作
+fork 操作包括以下三种：
+
+- 同步操作，即 bgsave 时是否进行同步；
+- 与内存量息息相关：内存越大，耗时越长；
+- info：lastest_fork_usec，持久化操作。
+改善 fork 的方式有以下四种：
+
+- 使用物理机或支持高效 fork 的虚拟技术；
+- 控制 Redis 实例最大可用内存 maxmemory；
+- 合理配置 Liunx 系统内存分配策略：vm.overcommit_memory=1；
+- 降低频率，如延长 AOF 重写 RDB，不必要的全量复制。
+
+2. 子进程的开销以及优化
+这里主要指 CPU、内存、硬盘三者的开销与优化。
+
+- CPU
+
+	开销：AOF 和 RDB 生成，属于 CPU 密集型，对 CPU 是巨大开销；
+
+	优化：不做 CPU 绑定，不与 CPU 密集型部署。
+
+- 内存
+
+	开销：需要通过 fork 来消耗内存的，如 copy-on-write。
+
+	优化：echo never > /sys/kernel/mm/transparent_hugepage/enabled，有时启动的时候会出现警告的情况，这个时候需要配置这个命令。
+
+- 硬盘
+
+   开销：由于大量的 AOF 和 RDB 文件写入，导致硬盘开销大，建议使用 iostat、iotop 分析硬盘状态。
+
+  优化：
+
+ 不要和高硬盘负载部署到一起，比如存储服务、消息队列等等；
+
+ 配置文件中的 no-appendfsync-on-rewrite 设置成 yes；
+
+ 当写入量很大的时候，建议更换 SSD 硬盘；
+
+ 单机多实例持久化文件考虑硬盘分配分盘。
+
+3. AOF 追加阻塞
+我们如果使用 AOF 策略，通常就会使用每秒刷盘的策略（everysec），主线程会阻塞，直到同步完成。首先我们知道主线程是非常宝贵的资源，其次我们每秒刷盘实际上未必是 1 秒，可能是 2 秒的数据。
+![在这里插入图片描述](http://images.gitbook.cn/47dd7580-fc18-11e7-b435-c9c42b4c17e4)
+
+我们如何定位 AOF 阻塞？
+
+- 通过 Redis 日志
+![在这里插入图片描述](http://images.gitbook.cn/776f3c10-fc19-11e7-b435-c9c42b4c17e4)
+
+上图可以看到， Redis 日志会出现上述的语句，告诉你异步 IO 同步时间太长，你的硬盘是否有问题，同时会拖慢 Redis。
+
+当然除了上述的问题，你还可以用 Redis 的 info 方式来确定问题。
+
+...
+
 
 
