@@ -351,27 +351,170 @@ fork 操作包括以下三种：
 当一个主机下面挂了很多个 Slave 从机的时候，主机 Master 挂了。这时 Master 主机重启后，因为 runid 发生了变化，所有的 Slave 从机都要做一次全量复制。这将引起单节点和单机器的复制风暴，开销会非常大。
 ![](http://images.gitbook.cn/581fbbc0-017b-11e8-b469-398f4f0730cb)
 
-单节点复制风暴。当主节点重启，多从节点会复制。这个时候需要更换复制拓扑。上图就是改变拓扑结构的问题，通过在 Slave 下再分从机，可以有效的减少主机 Master 的压力。
+- 单节点复制风暴。当主节点重启，多从节点会复制。这个时候需要更换复制拓扑。上图就是改变拓扑结构的问题，通过在 Slave 下再分从机，可以有效的减少主机 Master 的压力。
+![](http://images.gitbook.cn/1a2ef3d0-017b-11e8-b469-398f4f0730cb)
+- 单机器的复制风暴。如上图，如果每个 Master 主机只有一台 Slave 从机，那么当机器宕机以后，会产生大量全量复制。这是非常危险的情况，带宽马上会被占用，会导致不可用。这个问题在实际运维中必须注意。在这种情况下，建议将**单机器改成 Redis Sentinel。这样可以自动将从机变成主机 Master。**
 
 
 
 
+### 07：Redis Sentinel 部署和运维
+上一篇，我们讲解了 Redis 复制的主要内容，但 Redis 复制有一个缺点，当主机 Master 宕机以后，我们需要人工解决。那么能不能自动解决主机宕机的问题呢？
+
+Redis Sentinel 正是为了解决这样的问题而被开发的。Redis Sentinel 是一个分布式的架构，每一个 Sentinel 节点会对数据节点和其余 Sentinel 节点进行监控，当发现某个节点无法到达的时候，会自动标识该节点。如果这个节点是主节点，那么它会和其他 Sentinel 节点“协商”，大部分节点都认为主节点无法到达的时候，它们会选举一个 Sentinel 节点来完成自动故障转移，同时会告知 Redis 的应用方。
+
+由于这个过程是自动化的，不需要人工参与，大大提高了 Redis 的高可用性。
+
+接下来，我们将从实现流程、安装配置、客户端连接、实现原理、常见开发运维问题这五个方面来探讨。
+
+#### 7.1 实现流程
+如下图所示，Sentinel 集群会监控每一个 Slave 和 Master。客户端不再直接从 Redis 获取信息，而是通过 Sentinel 集群来获取信息。
+
+![](http://images.gitbook.cn/d93125c0-0cb9-11e8-a370-e181c30bd776)
+
+再看下面这张图，当 Master 宕机了，Sentinel 监控到 Master 有问题，就会和其他 Sentinel 进行选举，选举出一个 Sentinel 作为领导，然后选出一个 Slave 作为 Master，并通知其他 Slave。上图 Slave1 变成了 Master，如果原来的 Master 又连上了，也会变成 Slave 从机。
+
+![](http://images.gitbook.cn/0b10c960-0cba-11e8-9706-9106925a3925)
+
+#### 7.2 安装与配置
+我们将从以下两个方面讲解如何安装和配置主从节点和 Sentinel 节点。
+
+- 如何配置开启主从节点；
+- 如何开启 Sentinel 监控主节点。
+
+1. 开启主从节点
+Sentinel 对主节点和从节点的配置是不同的，需要分别配置，我们分开来讲解。
+
+- 主节点配置
+我们在命令行使用下面的命令进行主节点的启动。
+```
+redis-server redis-7000.conf
+```
+启动完成以后，我们参考下面的配置进行参数的设置。
+```
+port 7000
+daemonize yes // 守护进程
+pidfile /var/run/redis-7000.pid // 给出 pid
+logfile “7000.log” // 日志查询
+dir "/opt/redis/data" // 工作目录
+```
+
+
+- 从节点配置
+我们在命令行使用下面的命令进行从节点的启动。
+```
+redis-server redis-7001.conf
+redis-server redis-7002.conf
+```
+启动完成以后，和主节点配置一样，配置下面的参数。这个时候要注意，我们需要分别对 Slave 节点的每台机器进行配置。
+Slave1 的配置如下。
+```
+port 7001
+daemonize yes // 守护进程
+pidfile /var/run/redis-7001.pid // 给出 pid
+logfile “7001.log” // 日志查询
+dir "/opt/redis/data" // 工作目录
+slaveof 127.0.0.1 7000
+```
+Slave2 的配置如下。
+```
+port 7002
+daemonize yes // 守护进程
+pidfile /var/run/redis-7002.pid // 给出 pid
+logfile “7002.log” // 日志查询
+dir "/opt/redis/data" // 工作目录
+slaveof 127.0.0.1 7000
+```
+
+2. Sentinel 监控主要配置
+开启了主从节点以后，我们需要对 Sentinel 进行监控上的配置，见下面的配置参数。
+```
+port 端口号
+dir "/opt/redis/data/"
+logfile "端口号.log"
+sentinel monitor mymaster 127.0.0.1 7000 2
+sentinel down-after-millseconds mymaster 30000
+sentinel parallel-syncs mymaster 1
+sentinel failover-timeout mymaster 180000
+```
+
+由于需要配置多台 Sentinel，从上面配置信息可以看到，除了修改端口号，其他配置都是相同的。重点看最后四个配置，这四个配置是 Sentinel 的核心配置。我们分别来解释一下这四个配置，斜杠后面的文字解释了该参数的意义。
+```
+sentinel monitor mymaster 127.0.0.1 7000 2 // 监控的主节点的名字、IP 和端口，最后一个 2 表示有 2 台 Sentinel 发现有问题时，就会发生故障转移；
+
+sentinel down-after-millseconds mymaster 30000 // 这个是超时的时间。打个比方，当你去 ping 一个机器的时候，多长时间后仍 ping 不通，那么就认为它是有问题；
+
+sentinel parallel-syncs mymaster 1 // 指出 Sentinel 属于并发还是串行。1 代表每次只能复制一个，可以减轻 Master 的压力；
+
+sentinel failover-timeout mymaster 180000 // 表示故障转移的时间。
+```
+
+7.3 Sentinel 客户端原理
+我们配置高可用的时候，如果只是配置服务端的高可用是不够的。如果客户端感知不到服务端的高可用，是不会起作用的。所以，我们不但要让服务端高可用，还要让客户端也是高可用的。
+
+我们先来看下客户端基本原理。
+
+第一步，客户端 Client 需要遍历 Sentinel 节点集合，找到一个可用的 Sentinel 节点，同时需要获取 Master 主机的 masterName。如下图所示。
+
+![](http://images.gitbook.cn/1ff79610-0cba-11e8-bdd7-1d78e572a792)
+
+第二步，当客户端找到 Sentinel-2 节点的时候，Client 会通过 get-master-addr-by-name 命令获取 masterName，这个时候，Sentinel-2 会获取真正的名称和地址。如下图所示。
+
+![](http://images.gitbook.cn/73df8940-0cba-11e8-b141-a5ea9a5a91f4)
+
+第三步，Client 获取到 Master 节点的时候，还会发出 role 或 role replication 命令，验证是不是 Master 节点，Sentinel-2 会返回这个节点信息加以验证。如下图所示。
+
+![](http://images.gitbook.cn/55760b50-0cba-11e8-a370-e181c30bd776)
+
+第四步，如果 Sentinel 感知到 Master 宕机了，这时 Sentinel 集群应该是最先知道的。客户端和 Sentinel 集群之间其实是发布订阅，客户端 Client 去订阅某个 Sentinel 的频道，如果哪个 Sentinel 发现 Master 发生了变化，Client 是会被通知到这个信息的，如下图所示。但是要注意这个不是代理模式。
+
+![](http://images.gitbook.cn/86744fa0-0cba-11e8-b141-a5ea9a5a91f4)
+
+总结一下，以上四步就是客户端和 Sentinel 集群的基本原理，任何客户端原理都是按照这个流程做的，只是内部的封装不同而已。
 
 
 
+1. Jedis
+我们先通过使用率最高的 Java 的客户端 Jedis 讲起。
+
+如何通过代码实现 Sentinel 的访问，让我们来看看代码如何连接 Sentinel 的资源池。
+```
+JedisSentinelPool sentinelPool = new JedisSentinelPool(masterName,sentinelSet,poolConfig,timeout); //内部的本质还是去连接 Master 主机，参数 masterName 表示 Master 名称，sentinelSet
+ 表示 Sentinel 集合，后面依次是 poolConfig 配置和超时时间
+Jedis jedis = null;
+try{
+    //获得
+ redisSentinelPool 资源
+    jedis = redisSentinelPool.getResource();
+    //Jedis 相关的命令
+}catch (Exception e){
+    logger.error(e.getMessage(),e);
+}finally{
+    if(jedis!=null){
+        jedis.close(); // Jedis 归还
+    }
+}
+```
+
+2. redis-py
+接下来我们再来看下如何使用 Python 连 Redis 客户端的 Sentinel，和 Jedis 一样，我们将直接给出连接 Sentinel 的代码。
+```
+from redis.sentinel import Sentinel
+sentinel = Sentinel([('localhost',26379),('localhost',26380),('localhost',26381)],socket_time=0.1) // 获取可用的 Sentinel，并设置超时时间。
+
+sentinel.discover_master('mymaster') // 获取 Master 地址
+>>> ('127.0.0.1',7000)
+
+sentinel.discover_slaves('mymaster') //获取 Slave 地址
+>>> [('127.0.0.1',7001),('127.0.0.1',7002)]
+```
+
+
+sentinal 原理...
 
 
 
-
-
-
-
-
-
-
-
-
-
+### 08：Redis Cluster——分布式解决方案
 
 
 
