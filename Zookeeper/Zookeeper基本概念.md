@@ -21,3 +21,38 @@ ZooKeeper 的 ZNode，全部使用“绝对路径”，与文件系统所不同�
 ZooKeeper 支持“顺序”（Sequence）ZNode，顺序 ZNode 创建时，ZooKeeper 将自动添加“自增数字”作为后缀（“自增数字”由父级 ZNode 通过 4 字节有符号整数维护）。
 
 
+#### ZNode Stat ####
+除了存储的数据，ZNode 包含了称为 Stat 的数据结构，用于存储 ZNode 的属性信息，主要包括：
+
+- cZxid / mZxid：ZNode 创建 / 最后更新的 Zxid
+- ctime / mtime：ZNode 创建 / 最后更新的时间（Unix 时间，毫秒）
+- dataVersion ：ZNode 数据版本
+- dataLength ：ZNode 存储的数据长度
+- numChildren ：子级 ZNode 的数量
+- 其他关于 ACL、子级 ZNode 的信息
+关于 Zxid：所有提交到 ZooKeeper 的事务，都会被标记唯一的 ZooKeeper Transaction Id。
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
