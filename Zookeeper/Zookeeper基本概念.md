@@ -32,6 +32,54 @@ ZooKeeper 支持“顺序”（Sequence）ZNode，顺序 ZNode 创建时，ZooKe
 - 其他关于 ACL、子级 ZNode 的信息
 关于 Zxid：所有提交到 ZooKeeper 的事务，都会被标记唯一的 ZooKeeper Transaction Id。
 
+### ZooKeeper Session ### 
+ZooKeeper Session（会话），即为 ZooKeeper 客户端与服务端交互的通道。概述而言，客户端和服务端的 TCP 连接即为 Session，ZooKeeper 抽象了更多的会话状态。
+Session 于 ZooKeeper 服务端，以 SessionId 作为唯一标示，同时，ZooKeeper 支持客户端使用 SessionId 进行“Session 复用”（需要同时提供 SessionPasswd）。
+
+#### ZooKeeper Session 状态维护 ####
+ZooKeeper 客户端对象创建时，Session 即进入 CONNECTING 状态，当客户端与服务端（集群的任意节点）完成连接，即进入 CONNECTED 状态。
+
+客户端主动关闭 Session 前，通过“心跳”维护 Session 有效性，若连接中断，ZooKeeper 客户端将尝试重新连接（再次进入 CONNECTING ）：
+
+若在“Session 超时时间”内，连接重新建立，Session 继续有效，再次进入 CONNECTED；
+否则，服务端将标记 Session 过期（即使连接最终重新建立），进行清理（例如：临时 ZNode 删除），Session 最终进入 CLOSE 状态。
+Session 是否过期，完全由 ZooKeeper 服务端维护。对于 ZooKeeper 客户端，仅当 Session 过期，才应当重新创建客户端对象。
+
+多个客户端使用相同的 SessionId 与 SessionPasswd “连接复用”，可能出现“SessionMovedException”，请参阅：ZooKeeper Programmer's Guide。
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
