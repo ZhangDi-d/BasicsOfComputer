@@ -48,13 +48,35 @@ Session 是否过期，完全由 ZooKeeper 服务端维护。对于 ZooKeeper �
 多个客户端使用相同的 SessionId 与 SessionPasswd “连接复用”，可能出现“SessionMovedException”，请参阅：ZooKeeper Programmer's Guide。
 
 
+### ZooKeeper Watch ### 
+对于全部的“读”操作，ZooKeeper 允许客户端于 ZNode 设置 Watch，当 ZNode 变更时，Watch 将被触发并且通知到客户端（即 Watcher）。Watch 是 “一次性” 的，Watch 被触发时即被清除。
+
+Watch“异步地”通知到客户端，“通知内容”不包含 ZNode 变更后的数据，需要由客户端读取。
+
+由 ZooKeeper 确保，事件到客户端的通知，严格“按顺序”进行（事务于 ZooKeeper 中的顺序）。此外，当 Watch 被触发时，设置了 Watch 的客户端，接收到通知前，无法获取变更后的数据。
 
 
+#### ZooKeeper Watch 事件类型 ####
+我们假设判断 ZNode 是否存在、获取 ZNode 数据、获取 ZNode 子级 ZNode 的方法分别为 exists()、getData()、getChildren()。
+
+- 创建事件：exists() 设置的 Watch 能够被触发；
+- 删除事件：exists()、getData()、getChildren() 设置的 Watch 能够被触发；
+- 变更事件：getData() 设置的 Watch 能够被触发；
+- 子级 ZNode 事件： getChildren() 设置的 Watch 能够被触发。
+对于单一的 Watch 对象（例如，回调函数），由单一变更引起的事件，Watch 对象将被调用仅仅被调用一次，即使由多个“读”进行了 Watch 设置。
 
 
+### ZooKeeper ACL ###
+ZooKeeper 通过 ACL 控制 ZNode 的访问权限（默认情况，ZNode 无访问权限控制），权限维度包括：
 
+- CREATE：创建 ZNode；
+- READ：获取 ZNode 数据及其子级 ZNode；
+- WRITE：ZNode 数据写入；
+- DELETE：删除 ZNode；
+- ADMIN：权限设置。
+- ZooKeeper 支持多种权限模式，最常见的 Digest 模式，类似于 username / password。
 
-
+限于篇幅，关于 ACL，本文不予以展开，请参阅：ZooKeeper Programmer's Guide。
 
 
 
