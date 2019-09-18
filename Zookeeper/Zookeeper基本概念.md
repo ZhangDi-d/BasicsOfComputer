@@ -79,7 +79,15 @@ ZooKeeper 通过 ACL 控制 ZNode 的访问权限（默认情况，ZNode 无访�
 限于篇幅，关于 ACL，本文不予以展开，请参阅：ZooKeeper Programmer's Guide。
 
 
+### ZooKeeper 一致性保证 ###
+基于 ZooKeeper 的设计，允许使用“Leader”和“Follower”同时提供“读”服务，由此涉及“一致性”问题，ZooKeeper 保证：
 
+- 顺序一致性（Sequential Consistency）：来自相同客户端提交的事务，ZooKeeper 将严格按照其提交顺序依次执行；
+- 原子性（Atomicity）：于 ZooKeeper 集群中提交事务，事务将“全部完成”或“全部未完成”，不存在“部分完成”；
+- 单一系统镜像（Single System Image）：客户端连接到 ZooKeeper 集群的任意节点，其获得的数据视图都是相同的；
+- 可靠性（Reliability）：事务一旦完成，其产生的状态变化将永久保留，直到其他事务进行覆盖；
+- 实时性（Timeliness）：事务一旦完成，客户端将于限定的时间段内，获得最新的数据。
+- 综合而言，ZooKeeper 实现了“最终一致性”模型。
 
 
 
