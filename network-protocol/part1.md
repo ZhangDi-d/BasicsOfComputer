@@ -23,3 +23,34 @@
 查看ip:Windows 上是 ipconfig，在 Linux 上是 ifconfig;Linux 上还有什么其他命令可以查看 IP 地址吗？答案是 **ip addr**
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
