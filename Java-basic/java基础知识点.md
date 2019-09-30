@@ -139,19 +139,58 @@ LinkedList顾名思义是Java提供的双向链表，所以它不需要像上面
 
 ![在这里插入图片描述](https://img-blog.csdnimg.cn/20190930143507252.png?x-oss-process=image/watermark,type_ZmFuZ3poZW5naGVpdGk,shadow_10,text_aHR0cHM6Ly9ibG9nLmNzZG4ubmV0L1NoZWxsZXlMaXR0bGVoZXJv,size_16,color_FFFFFF,t_70)
 
+我们可以看到Java的集合框架， Collection接口是所有集合的根，然后扩展开提供了三大类集合，分别是：
+- List，也就是我们前面介绍最多的有序集合，它提供了方便的访问、插入、删除等操作。
+- Set， Set是不允许重复元素的，这是和List最明显的区别，也就是不存在两个对象equals返回true。我们在日常开发中有很多需要保证元素唯一性的场合。
+- Queue/Deque，则是Java提供的标准队列结构的实现，除了集合的基本功能，它还支持类似先入先出（ FIFO， First-in-First-Out）或者后入先出（ LIFO， Last-In-FirstOut）等特定行为。这里不包括BlockingQueue，因为通常是并发编程场合，所以被放置在并发包里。
+
+今天介绍的这些集合类，都不是线程安全的，对于java.util.concurrent里面的线程安全容器，我在专栏后面会去介绍。但是，并不代表这些集合完全不能支持并发编程的场景，
+在Collections工具类中，提供了一系列的synchronized方法，比如
+```java
+static <T> List<T> synchronizedList(List<T> list)
+```
+我们完全可以利用类似方法来实现基本的线程安全集合：
+```java
+List list = Collections.synchronizedList(new ArrayList());
+```
+它的实现，基本就是将每个基本方法，比如get、 set、 add之类，都通过synchronizd添加基本的同步支持，非常简单粗暴，但也非常实用。注意这些方法创建的线程安全集合，都
+符合迭代时fail-fast行为，当发生意外的并发修改时，尽早抛出ConcurrentModifcationException异常，以避免不可预计的行为。
+
+另外一个经常会被考察到的问题，就是理解Java提供的默认排序算法，具体是什么排序方式以及设计思路等。
+
+这个问题本身就是有点陷阱的意味，因为需要区分是Arrays.sort()还是Collections.sort() （底层是调用Arrays.sort()）；什么数据类型；多大的数据集（太小的数据集，复杂排
+序是没必要的， Java会直接进行二分插入排序）等。
+
+对于原始数据类型，目前使用的是所谓双轴快速排序（ Dual-Pivot QuickSort），是一种改进的快速排序算法，早期版本是相对传统的快速排序，你可以阅读源码。
+
+而对于对象数据类型，目前则是使用TimSort，思想上也是一种归并和二分插入排序（ binarySort）结合的优化排序算法。 TimSort并不是Java的独创，简单说它的思路是查找
+
+数据集中已经排好序的分区（这里叫run），然后合并这些分区来达到排序的目的。
+
+另外， Java 8引入了并行排序算法（直接使用parallelSort方法），这是为了充分利用现代多核处理器的计算能力，底层实现基于fork-join框架，当处理的数据集比较小的时候，差距不明显，甚至还表现差一点；但是，当数据集增长到数万或百万以上时，提高就非常大了，具体还是取决于处理器和系统环境。
 
 
 
+### Hashtable、 HashMap、 TreeMap有什么不同？ 
+**典型回答:**
+Hashtable、 HashMap、 TreeMap都是最常见的一些Map实现，是以键值对的形式存储和操作数据的容器类型。
+
+Hashtable是早期Java类库提供的一个哈希表实现，本身是同步的，不支持null键和值，由于同步导致的性能开销，所以已经很少被推荐使用。
+
+HashMap是应用更加广泛的哈希表实现，行为上大致上与HashTable一致，主要区别在于HashMap不是同步的，支持null键和值等。通常情况下， HashMap进行put或者get操
+作，可以达到常数时间的性能，所以它是绝大部分利用键值对存取场景的首选，比如，实现一个用户ID和用户信息对应的运行时存储结构。
+
+TreeMap则是基于红黑树的一种提供顺序访问的Map，和HashMap不同，它的get、 put、 remove之类操作都是O（ log(n)）的时间复杂度，具体顺序可以由指定
+的Comparator来决定，或者根据键的自然顺序来判断。
 
 
+![在这里插入图片描述](https://img-blog.csdnimg.cn/2019093015421066.png?x-oss-process=image/watermark,type_ZmFuZ3poZW5naGVpdGk,shadow_10,text_aHR0cHM6Ly9ibG9nLmNzZG4ubmV0L1NoZWxsZXlMaXR0bGVoZXJv,size_16,color_FFFFFF,t_70)
 
+Hashtable比较特别，作为类似Vector、 Stack的早期集合相关类型，它是扩展了Dictionary类的，类结构上与HashMap之类明显不同。
 
+HashMap等其他Map实现则是都扩展了AbstractMap，里面包含了通用方法抽象。不同Map的用途，从类图结构就能体现出来，设计目的已经体现在不同接口上。
 
-
-
-
-
-
+大部分使用Map的场景，通常就是放入、访问或者删除，而对顺序没有特别要求， HashMap在这种情况下基本是最好的选择。
 
 
 
