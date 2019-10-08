@@ -464,12 +464,38 @@ final的意义；同时，没有非静态方法实现，也就是说要么是抽
 
 
 ### 谈谈你知道的设计模式？请手动实现单例模式， Spring等框架中使用了哪些模式？
+**典型回答**
+大致按照模式的应用目标分类，设计模式可以分为创建型模式、结构型模式和行为型模式。
+- 创建型模式，是对对象创建过程的各种问题和解决方案的总结，包括各种工厂模式（Factory、 Abstract Factory）、单例模式（Singleton）、构建器模式（Builder）、原型模
+式（ProtoType）。
+- 结构型模式，是针对软件设计结构的总结，关注于类、对象继承、组合方式的实践经验。常见的结构型模式，包括桥接模式（Bridge）、适配器模式（Adapter）、装饰者模式
+（Decorator）、代理模式（Proxy）、组合模式（Composite）、外观模式（Facade）、享元模式（Flyweight）等。
+- 行为型模式，是从类或对象之间交互、职责划分等角度总结的模式。比较常见的行为型模式有策略模式（Strategy）、解释器模式（Interpreter）、命令模式（Command）、
+观察者模式（Observer）、迭代器模式（Iterator）、模板方法模式（Template Method）、访问者模式（Visitor）。
 
 
+一起来简要看看主流开源框架，如Spring等如何在API设计中使用设计模式。你至少要有个大体的印象，如：
+- BeanFactory和ApplicationContext应用了工厂模式。
+- 在Bean的创建中， Spring也为不同scope定义的对象，提供了单例和原型等模式实现。
+- AOP领域则是使用了代理模式、装饰器模式、适配器模式等。
+- 各种事件监听器SpringEvent，是观察者模式的典型应用。
+- 类似JdbcTemplate等则是应用了模板模式。
 
 
+### synchronized和ReentrantLock有什么区别？有人说synchronized最慢，这话靠谱吗？
+**典型回答**
+synchronized是Java内建的同步机制，所以也有人称其为Intrinsic Locking，它提供了互斥的语义和可见性，当一个线程已经获取当前锁时，其他试图获取的线程只能等待或者阻
+塞在那里。
 
+在Java 5以前， synchronized是仅有的同步手段，在代码中， synchronized可以用来修饰方法，也可以使用在特定的代码块儿上，本质上synchronized方法等同于把方法全部语
+句用synchronized块包起来。
 
+ReentrantLock，通常翻译为再入锁，是Java 5提供的锁实现，它的语义和synchronized基本相同。再入锁通过代码直接调用lock()方法获取，代码书写也更加灵活。与此同
+时， ReentrantLock提供了很多实用的方法，能够实现很多synchronized无法做到的细节控制，比如可以控制fairness，也就是公平性，或者利用定义条件等。但是，编码中也需
+要注意，必须要明确调用unlock()方法释放，不然就会一直持有该锁。
+
+synchronized和ReentrantLock的性能不能一概而论，早期版本synchronized在很多场景下性能相差较大，在后续版本进行了较多改进，在低竞争场景中表现可能优
+于ReentrantLock。
 
 
 
