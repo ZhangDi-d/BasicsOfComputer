@@ -169,58 +169,268 @@ List list = Collections.synchronizedList(new ArrayList());
 
 另外， Java 8引入了并行排序算法（直接使用parallelSort方法），这是为了充分利用现代多核处理器的计算能力，底层实现基于fork-join框架，当处理的数据集比较小的时候，差距不明显，甚至还表现差一点；但是，当数据集增长到数万或百万以上时，提高就非常大了，具体还是取决于处理器和系统环境。
 
+### 对比Hashtable、 HashMap、 TreeMap有什么不同？
 
-
-### Hashtable、 HashMap、 TreeMap有什么不同？ 
-**典型回答:**
+**典型回答**
 Hashtable、 HashMap、 TreeMap都是最常见的一些Map实现，是以键值对的形式存储和操作数据的容器类型。
 
-Hashtable是早期Java类库提供的一个哈希表实现，本身是同步的，不支持null键和值，由于同步导致的性能开销，所以已经很少被推荐使用。
+Hashtable是早期Java类库提供的一个哈希表实现，本身是同步的，**不支持null键和值**，由于同步导致的性能开销，所以已经很少被推荐使用。
 
-HashMap是应用更加广泛的哈希表实现，行为上大致上与HashTable一致，主要区别在于HashMap不是同步的，支持null键和值等。通常情况下， HashMap进行put或者get操
-作，可以达到常数时间的性能，所以它是绝大部分利用键值对存取场景的首选，比如，实现一个用户ID和用户信息对应的运行时存储结构。
+HashMap是应用更加广泛的哈希表实现，行为上大致上与HashTable一致，主要区别在于HashMap不是同步的，支持null键和值等。通常情况下， HashMap进行put或者get操作，可以达到常数时间的性能，所以它是绝大部分利用键值对存取场景的首选，比如，实现一个用户ID和用户信息对应的运行时存储结构。
 
-TreeMap则是基于红黑树的一种提供顺序访问的Map，和HashMap不同，它的get、 put、 remove之类操作都是O（ log(n)）的时间复杂度，具体顺序可以由指定
+TreeMap则是基于红黑树的一种提供顺序访问的Map，和HashMap不同，它的get、 put、 remove之类操作都是O（log(n)）的时间复杂度，具体顺序可以由指定
 的Comparator来决定，或者根据键的自然顺序来判断。
 
+![在这里插入图片描述](https://img-blog.csdnimg.cn/20191006145504941.png?x-oss-process=image/watermark,type_ZmFuZ3poZW5naGVpdGk,shadow_10,text_aHR0cHM6Ly9ibG9nLmNzZG4ubmV0L1NoZWxsZXlMaXR0bGVoZXJv,size_16,color_FFFFFF,t_70)
 
-![在这里插入图片描述](https://img-blog.csdnimg.cn/2019093015421066.png?x-oss-process=image/watermark,type_ZmFuZ3poZW5naGVpdGk,shadow_10,text_aHR0cHM6Ly9ibG9nLmNzZG4ubmV0L1NoZWxsZXlMaXR0bGVoZXJv,size_16,color_FFFFFF,t_70)
+LinkedHashMap通常提供的是遍历顺序符合插入顺序，它的实现是通过为条目（键值对）维护一个双向链表。注意，通过特定构造函数，我们可以创建反映访问顺序的实例，所
+谓的put、 get、 compute等，都算作“访问”。
 
-Hashtable比较特别，作为类似Vector、 Stack的早期集合相关类型，它是扩展了Dictionary类的，类结构上与HashMap之类明显不同。
+对于TreeMap，它的整体顺序是由键的顺序关系决定的，通过Comparator或Comparable（自然顺序）来决定。
 
-HashMap等其他Map实现则是都扩展了AbstractMap，里面包含了通用方法抽象。不同Map的用途，从类图结构就能体现出来，设计目的已经体现在不同接口上。
-
-大部分使用Map的场景，通常就是放入、访问或者删除，而对顺序没有特别要求， HashMap在这种情况下基本是最好的选择。
-
-
-** HashMap源码分析:**
-前面提到， HashMap设计与实现是个非常高频的面试题，所以我会在这进行相对详细的源码解读，主要围绕：
-- HashMap内部实现基本点分析。
-- 容量（ capcity）和负载系数（ load factor）。
-- 树化 。
-
-首先，我们来一起看看HashMap内部的结构，它可以看作是数组（ Node[] table）和链表结合组成的复合结构，数组被分为一个个桶（ bucket），通过哈希值决定了键值对在这个
-数组的寻址；哈希值相同的键值对，则以链表形式存储，你可以参考下面的示意图。这里需要注意的是，如果链表大小超过阈值（ TREEIFY_THRESHOLD, 8），图中的链表就会被
-改造为树形结构。
-
-![在这里插入图片描述](https://img-blog.csdnimg.cn/20190930155011802.png?x-oss-process=image/watermark,type_ZmFuZ3poZW5naGVpdGk,shadow_10,text_aHR0cHM6Ly9ibG9nLmNzZG4ubmV0L1NoZWxsZXlMaXR0bGVoZXJv,size_16,color_FFFFFF,t_70)
+**HashMap：**
+而对于负载因子，我建议：
+- 如果没有特别需求，不要轻易进行更改，因为JDK自身的默认负载因子是非常符合通用场景的需求的。
+- 如果确实需要调整，建议不要设置超过0.75的数值，因为会显著增加冲突，降低HashMap的性能。
+- 如果使用太小的负载因子，按照上面的公式，预设容量值也进行调整，否则可能会导致更加频繁的扩容，增加无谓的开销，本身访问性能也会受影响。
 
 
+**那么，为什么HashMap要树化呢？**
+本质上这是个**安全**问题。 因为在元素放置过程中，如果一个对象哈希冲突，都被放置到同一个桶里，则会形成一个链表，我们知道链表查询是线性的，会严重影响存取的性能。而在现实世界，构造哈希冲突的数据并不是非常复杂的事情，恶意代码就可以利用这些数据大量与服务器端交互，导致服务器端CPU大量占用，这就构成了哈希碰撞拒绝服务攻击，国内一线互联网公司就发生过类似攻击事件。
+
+**Hashtable、 HashMap、 TreeMap比较：**
+三者均实现了Map接口，存储的内容是基于key-value的键值对映射，一个映射不能有重复的键，一个键最多只能映射一个值。
+（1） 元素特性
+HashTable中的key、 value都不能为null； HashMap中的key、 value可以为null，很显然只能有一个key为null的键值对，但是允许有多个值为null的键值对； TreeMap中当未实现Comparator 接口时， key 不可以为null；当实现 Comparator 接口时，若未对null情况进行判断，则key不可以为null，反之亦然。
+（2）顺序特性
+HashTable、 HashMap具有无序特性。 TreeMap是利用红黑树来实现的（树中的每个节点的值，都会大于或等于它的左子树种的所有节点的值，并且小于或等于它的右子树中的所有节点的
+值），实现了SortMap接口，能够对保存的记录根据键进行排序。所以一般需要排序的情况下是选择TreeMap来进行，默认为升序排序方式（深度优先搜索），可自定义实现Comparator接口
+实现排序方式。
+（3）初始化与增长方式
+初始化时： HashTable在不指定容量的情况下的默认容量为11，且不要求底层数组的容量一定要为2的整数次幂； HashMap默认容量为16，且要求容量一定为2的整数次幂。
+扩容时： **Hashtable将容量变为原来的2倍加1； HashMap扩容将容量变为原来的2倍**。
+（4）线程安全性
+HashTable其方法函数都是同步的（采用synchronized修饰），不会出现两个线程同时对数据进行操作的情况，因此保证了线程安全性。也正因为如此，在多线程运行环境下效率表现非常低下。因为当一个线程访问HashTable的同步方法时，其他线程也访问同步方法就会进入阻塞状态。比如当一个线程在添加数据时候，另外一个线程即使执行获取其他数据的操作也必须被阻塞，大大降低了程序的运行效率，在新版本中已被废弃，不推荐使用。
+HashMap不支持线程的同步，即任一时刻可以有多个线程同时写HashMap;可能会导致数据的不一致。如果需要同步（1）可以用 Collections的synchronizedMap方法；（2）使用ConcurrentHashMap类，相较于HashTable锁住的是对象整体， ConcurrentHashMap基于lock实现锁分段技术。首先将Map存放的数据分成一段一段的存储方式，然后给每一段数据分配一把锁，当一个线程占用锁访问其中一个段的数据时，其他段的数据也能被其他线程访问。 ConcurrentHashMap不仅保证了多线程运行环境下的数据访问安全性，而且性能上有长足的提升。
+(5)一段话HashMap
+HashMap基于哈希思想，实现对数据的读写。当我们将键值对传递给put()方法时，它调用键对象的hashCode()方法来计算hashcode，让后找到bucket位置来储存值对象。当获取对象时，通过键对象的equals()方法找到正确的键值对，然后返回值对象。 HashMap使用链表来解决碰撞问题，当发生碰撞了，对象将会储存在链表的下一个节点中。 HashMap在每个链表节点中储存键值对对象。当两个不同的键对象的hashcode相同时，它们会储存在同一个bucket位置的链表中，可通过键对象的equals()方法用来找到键值对。如果链表大小超过阈值（TREEIFY_THRESHOLD, 8），链表就会被改造为树形结构。
 
 
+### 如何保证集合是线程安全的? ConcurrentHashMap如何实现高效地线程安全？
+**典型回答**:
+Java提供了不同层面的线程安全支持。在传统集合框架内部，除了Hashtable等同步容器，还提供了所谓的同步包装器（Synchronized Wrapper），我们可以调用Collections工具类提供的包装方法，来获取一个同步的包装容器（如Collections.synchronizedMap），但是它们都是利用非常粗粒度的同步方式，在高并发情况下，性能比较低下。
+另外，更加普遍的选择是利用并发包提供的线程安全容器类，它提供了：
+
+- 各种并发容器，比如ConcurrentHashMap、 CopyOnWriteArrayList。
+- 各种线程安全队列（Queue/Deque），如ArrayBlockingQueue、 SynchronousQueue。
+- 各种有序容器的线程安全版本等。
+- 
+具体保证线程安全的方式，包括有从简单的synchronize方式，到基于更加精细化的，比如基于分离锁实现的ConcurrentHashMap等并发实现等。具体选择要看开发的场景需求，
+总体来说，并发包内提供的容器通用场景，远优于早期的简单同步实现。
+
+**知识扩展**
+**1.为什么需要ConcurrentHashMap？**
+Hashtable本身比较低效，因为它的实现基本就是将put、 get、 size等各种方法加上“synchronized”。简单来说，这就导致了所有并发操作都要竞争同一把锁，一个线程在进行同步操作时，其他线程只能等待，大大降低了并发操作的效率。
+
+前面已经提过HashMap不是线程安全的，并发情况会导致类似CPU占用100%等一些问题，那么能不能利用Collections提供的同步包装器来解决问题呢？
+
+看看下面的代码片段，我们发现**同步包装器只是利用输入Map构造了另一个同步版本，所有操作虽然不再声明成为synchronized方法，但是还是利用了“this”作为互斥的mutex，没有真正意义上的改进！**
+
+```java
+private static class SynchronizedMap<K,V> implements Map<K,V>, Serializable {
+	private final Map<K,V> m; // Backing Map
+	final Object mutex; // Object on which to synchronize
+	// …
+	public int size() {
+	synchronized (mutex) {return m.size();}
+	}
+	// …
+}
+```
+所以， Hashtable或者同步包装版本，都只是适合在非高度并发的场景下。
+
+**2.ConcurrentHashMap分析**
+我们再来看看ConcurrentHashMap是如何设计实现的，为什么它能大大提高并发效率。
+首先，我这里强调， ConcurrentHashMap的设计实现其实一直在演化，比如在Java 8中就发生了非常大的变化（Java 7其实也有不少更新），所以，我这里将比较分析结构、实现机制等方面，对比不同版本的主要区别。
+
+**早期ConcurrentHashMap**，其实现是基于：
+- 分段锁，也就是将内部进行分段（Segment），里面则是HashEntry的数组，和HashMap类似，哈希相同的条目也是以链表形式存放。
+- HashEntry内部使用volatile的value字段来保证可见性，也利用了不可变对象的机制以改进利用Unsafe提供的底层能力，比如volatile access，去直接完成部分操作，以最优化性能，毕竟Unsafe中的很多操作都是JVM intrinsic优化过的。
+
+**ConcurrentHashMap 1.7中的get操作：get操作需要保证的是可见性，所以并没有什么同步逻辑。**
+**get**:
+```java
+public V get(Object key) {
+	Segment<K,V> s; // manually integrate access methods to reduce overhead
+	HashEntry<K,V>[] tab;
+	int h = hash(key.hashCode());
+	//利用位操作替换普通数学运算
+	long u = (((h >>> segmentShift) & segmentMask) << SSHIFT) + SBASE;
+	// 以Segment为单位，进行定位
+	// 利用Unsafe直接进行volatile access
+	if ((s = (Segment<K,V>)UNSAFE.getObjectVolatile(segments, u)) != null &&
+	(tab = s.table) != null) {
+		//省略
+	}
+	return null;
+}
+```
+**put**:而对于put操作，首先是通过二次哈希避免哈希冲突，然后以Unsafe调用方式，直接获取相应的Segment，然后进行线程安全的put操作：
+
+```java
+public V put(K key, V value) {
+	Segment<K,V> s;
+	if (value == null)
+		throw new NullPointerException();
+	// 二次哈希，以保证数据的分散性，避免哈希冲突
+	int hash = hash(key.hashCode());
+	int j = (hash >>> segmentShift) & segmentMask;
+	if ((s = (Segment<K,V>)UNSAFE.getObject // nonvolatile; recheck
+		(segments, (j << SSHIFT) + SBASE)) == null) // in ensureSegment
+		s = ensureSegment(j);
+	return s.put(key, hash, value, false);
+}
+```
+所以，从上面的源码清晰的看出，在进行并发写操作时：
+- ConcurrentHashMap会获取再入锁，以保证数据一致性， Segment本身就是基于ReentrantLock的扩展实现，所以，在并发修改期间，相应Segment是被锁定的。
+- 在最初阶段，进行重复性的扫描，以确定相应key值是否已经在数组里面，进而决定是更新还是放置操作，你可以在代码里看到相应的注释。重复扫描、检测冲突
+是ConcurrentHashMap的常见技巧。
+- HashMap可能发生扩容问题，在ConcurrentHashMap中同样存在。不过有一个明显区别，就是它进行的不是整体的扩容，而是单独对Segment进行扩容。
+
+**size:**
+分段计算两次，两次结果相同则返回，否则对所以段加锁重新计算
+
+**在Java 8和之后的版本中， ConcurrentHashMap发生了哪些变化呢？**
+- 总体结构上，**它的内部存储变得和HashMap结构非常相似，同样是大的桶（bucket）数组，然后内部也是一个个所谓的链表结构（bin），同步的粒度要更细致一些。**
+- 其**内部仍然有Segment定义，但仅仅是为了保证序列化时的兼容性而已，不再有任何结构上的用处。**
+- 因为不再使用Segment，初始化操作大大简化，修改为lazy-load形式，这样可以有效避免初始开销，解决了老版本很多人抱怨的这一点。
+- 数据存储利用volatile来保证可见性。
+- 使用CAS等操作，在特定场景进行无锁并发操作。
+- 使用Unsafe、 LongAdder之类底层手段，进行极端情况的优化。
+
+1.8 中，数据存储内部实现，我们可以发现**Key是final的，因为在生命周期中，一个条目的Key发生变化是不可能的；与此同时val，则声明为volatile，以保证可见性**。
+
+```java
+static class Node<K,V> implements Map.Entry<K,V> {
+	final int hash;
+	final K key;
+	volatile V val;
+	volatile Node<K,V> next;
+	// …
+}
+```
+**put：**
+
+```java
+final V putVal(K key, V value, boolean onlyIfAbsent) { 
+	if (key == null || value == null) throw new NullPointerException();
+	int hash = spread(key.hashCode());
+	int binCount = 0;
+	for (Node<K,V>[] tab = table;;) {
+	Node<K,V> f; int n, i, fh; K fk; V fv;
+	if (tab == null || (n = tab.length) == 0)
+		tab = initTable(); //初始化
+	else if ((f = tabAt(tab, i = (n - 1) & hash)) == null) {
+		// 利用CAS去进行无锁线程安全操作，如果bin是空的
+		if (casTabAt(tab, i, null, new Node<K,V>(hash, key, value)))
+		break;
+	}
+	else if ((fh = f.hash) == MOVED)
+		tab = helpTransfer(tab, f);
+	else if (onlyIfAbsent // 不加锁，进行检查
+			&& fh == hash
+			&& ((fk = f.key) == key || (fk != null && key.equals(fk)))
+			&& (fv = f.val) != null)
+		return fv;
+	else {
+		V oldVal = null;
+			synchronized (f) {
+			// 细粒度的同步修改操作...
+			}
+		}
+		// Bin超过阈值，进行树化
+		if (binCount != 0) {
+			if (binCount >= TREEIFY_THRESHOLD)
+				treeifyBin(tab, i);
+			if (oldVal != null)
+				return oldVal;
+				break;
+			}
+		}
+	}
+	addCount(1L, binCount);
+	return null;
+}
+```
+
+**put** CAS 加锁
+1.8中不依赖与segment加锁， segment数量与桶数量一致；
+
+首先判断容器是否为空，为空则进行初始化利用volatile的sizeCtl作为互斥手段，如果发现竞争性的初始化，就暂停在那里，等待条件恢复，否则利用CAS设置排他标志（U.compareAndSwapInt(this, SIZECTL, sc, -1)） ;否则重试
+
+对key hash计算得到该key存放的**桶位置（不再是segement)**，判断该桶是否为空，为空则利用CAS设置新节点
+
+否则使用synchronize加锁，遍历桶中数据，替换或新增加点到桶中
+最后判断是否需要转为红黑树，转换之前判断是否需要扩容
+
+**size**
+利用LongAdder累加计算（性能还要高于直接使用AtomicLong）
 
 
+### Java提供了哪些IO方式？ NIO如何实现多路复用？
+**典型回答**
+Java IO方式有很多种，基于不同的IO抽象模型和交互方式，可以进行简单区分。
+
+首先，传统的java.io包，它基于流模型实现，提供了我们最熟知的一些IO功能，比如File抽象、输入输出流等。交互方式是同步、阻塞的方式，也就是说，在读取输入流或者写入输出流时，在读、写动作完成之前，线程会一直阻塞在那里，它们之间的调用是可靠的线性顺序。java.io包的好处是代码比较简单、直观，缺点则是IO效率和扩展性存在局限性，容易成为应用性能的瓶颈。
+
+很多时候，人们也把java.net下面提供的部分网络API，比如Socket、 ServerSocket、 HttpURLConnection也归类到同步阻塞IO类库，因为网络通信同样是IO行为。
+
+第二，在Java 1.4中引入了NIO框架（java.nio包），提供了Channel、 Selector、 Bufer等新的抽象，可以构建多路复用的、同步非阻塞IO程序，同时提供了更接近操作系统底层的高性能数据操作方式。
+
+第三，在Java 7中， NIO有了进一步的改进，也就是NIO 2，引入了异步非阻塞IO方式，也有很多人叫它AIO（Asynchronous IO）。异步IO操作基于事件和回调机制，可以简单理解为，应用操作直接返回，而不会阻塞在那里，当后台处理完成，操作系统会通知相应线程进行后续工作。
+
+**知识扩展**
+首先，需要澄清一些基本概念：
+
+区分同步或异步（synchronous/asynchronous）。简单来说，同步是一种可靠的有序运行机制，当我们进行同步操作时，后续的任务是等待当前调用返回，才会进行下一步；
+而异步则相反，其他任务不需要等待当前调用返回，通常依靠事件、回调等机制来实现任务间次序关系。
+
+区分阻塞与非阻塞（blocking/non-blocking）。在进行阻塞操作时，当前线程会处于阻塞状态，无法从事其他任务，只有当条件就绪才能继续，比如ServerSocket新连接建立完毕，或数据读取、写入操作完成；而非阻塞则是不管IO操作是否结束，直接返回，相应操作在后台继续处理。
+
+**1.Java NIO概览**
+首先，熟悉一下NIO的主要组成部分：
+Buffer，高效的数据容器，除了布尔类型，所有原始数据类型都有相应的Buffer实现。
+Channel，类似在Linux之类操作系统上看到的文件描述符，是NIO中被用来支持批量式IO操作的一种抽象。
+
+File或者Socket，通常被认为是比较高层次的抽象，而Channel则是更加操作系统底层的一种抽象，这也使得NIO得以充分利用现代操作系统底层机制，获得特定场景的性能优化，例如， DMA（Direct Memory Access）等。不同层次的抽象是相互关联的，我们可以通过Socket获取Channel，反之亦然。
+
+**Selector，是NIO实现多路复用的基础，它提供了一种高效的机制，可以检测到注册在Selector上的多个Channel中，是否有Channel处于就绪状态，进而实现了单线程对多Channel的高效管理**。Selector同样是基于底层操作系统机制，不同模式、不同版本都存在区别。
+
+Chartset，提供Unicode字符串定义， NIO也提供了相应的编解码器等，例如，通过下面的方式进行字符串到ByteBufer的转换：
+
+```java
+Charset.defaultCharset().encode("Hello world!"));
+```
+BIO NIO 代码略。
+
+在Java 7引入的NIO 2中，又增添了一种额外的异步IO模式，利用事件和回调，处理Accept、 Read等操作。 AIO实现看起来是类似这样子：
+
+```java
+AsynchronousServerSocketChannel serverSock =AsynchronousServerSocketChannel.open().bind(sockAddr);
+serverSock.accept(serverSock, new CompletionHandler<>() { //为异步操作指定CompletionHandler回调函数
+	@Override
+	public void completed(AsynchronousSocketChannel sockChannel,AsynchronousServerSocketChannel serverSock) {
+	serverSock.accept(serverSock, this);
+	// 另外一个 write（sock， CompletionHandler{}）
+	sayHelloWorld(sockChannel, Charset.defaultCharset().encode("Hello World!"));
+	}
+	// 省略其他路径处理方法...
+});
+```
+**小结**:
+- BIO 同步阻塞；
+- NIO 同步非阻塞； 
+- AIO 异步非阻塞.
 
 
-
-
-
-
-
-
-
-
-
-
-
-
+### Java有几种文件拷贝方式？哪一种最高效？
