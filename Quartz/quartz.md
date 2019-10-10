@@ -1,5 +1,5 @@
 ## Quartz学习
-(笔记内容来源: https://www.cnblogs.com/daxin/archive/2013/05/27/3101972.html)
+
 ### 1.Quartz CronTrigger 最完整配置说明
 CronTrigger配置格式:
 
@@ -34,6 +34,8 @@ W 表示离指定日期的最近那个工作日(周一至周五). 例如在日�
 
 \# 序号(表示每月的第几个周几)，例如在周字段上设置"6#3"表示在每月的第三个周六.注意如果指定"#5",正好第五周没有周六，则不会触发该配置(用在母亲节和父亲节再合适不过了)
 
+
+<br/>
 
 ### Quartz Scheduler 任务参数与任务状态
 
@@ -317,6 +319,7 @@ JobDetail job = newJob(HelloJob.class)
 	.build();
 ```
 
+<br/>
 
 ### Quartz Scheduler当任务中出现异常时的处理策略(JobExecutionExceptions)
 
@@ -365,12 +368,15 @@ catch (Exception e) {
 }
 ```
 
+<br/>
 
 ### Quartz Scheduler与Spring集成(一) 基础配置与常见问题
 https://www.cnblogs.com/daxin/archive/2013/05/29/3107178.html
 
 常用操作代码:
 http://www.quartz-scheduler.org/documentation/quartz-2.3.0/cookbook/MultipleSchedulers.html
+
+<br/>
 
 ### Quartz How-To:Defining a Job (with input data)
 Job:
@@ -402,6 +408,8 @@ JobDetail job1 = newJob(MyJobClass.class)
 
 ```
 
+<br/>
+
 ### Quartz How-To: Scheduling a Job
 ```java
 // Define job instance
@@ -421,6 +429,7 @@ sched.scheduleJob(job, trigger);
 ```
 
 
+<br/>
 
 ### How-To: Update an existing job
 ```java
@@ -435,6 +444,9 @@ JobDetail job1 = newJob(MyJobClass.class)
 scheduler.addJob(job1, true);
 
 ```
+
+<br/>
+
 
 ### How-To: Updating a trigger
 有一些业务场景，我们需要手动去更新任务的触发时间，比如某个任务是每隔10分钟触发一次，现在需要改成每隔20分钟触发一次，这样既就需要手动的更新触发器
@@ -459,7 +471,7 @@ sched.rescheduleJob(triggerKey("oldTrigger", "group1"), trigger);
 如果返回 null 说明替换失败，原因就是旧触发器没有找到，所以新的触发器也不会设置进去.
 
 
-
+<br/>
 
 ### How-To: Using Job Listeners
 Quartz Scheduler 可以对Job(任务)建立一个监听器，分别对任务执行 之前-之后-取消 3个状态进行监听。 
@@ -553,6 +565,7 @@ GroupMatcher<JobKey> matcher = GroupMatcher.groupContains("g");
 sched.getListenerManager().addJobListener(new MyJobListener(), matcher);
 ```
 
+<br/>
 
 ### How-To: Trigger That Executes Every Day
 Using CronTrigger
@@ -587,11 +600,98 @@ trigger = newTrigger()
 
 ```
 
+<br/>
+
+### Quartz Trigger Priority 触发器优先级
+当多个触发器在一个相同的时间内触发，并且调度引擎中的资源有限的情况下，那么具有较高优先级的触发器先触发。
+
+需要将配置文件中的org.quartz.threadPool.threadCount = 1设置为1，这样能更好的测试出效果。
+```java
+package com.gary.operation.jobdemo.example14;
+
+import static org.quartz.DateBuilder.futureDate;
+import static org.quartz.JobBuilder.newJob;
+import static org.quartz.SimpleScheduleBuilder.simpleSchedule;
+import static org.quartz.TriggerBuilder.newTrigger;
+
+import java.util.Date;
+
+import org.quartz.JobDetail;
+import org.quartz.Scheduler;
+import org.quartz.SchedulerFactory;
+import org.quartz.Trigger;
+import org.quartz.DateBuilder.IntervalUnit;
+import org.quartz.impl.StdSchedulerFactory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+public class PriorityExample {
+    
+    public void run() throws Exception {
+        Logger log = LoggerFactory.getLogger(PriorityExample.class);
+
+        // First we must get a reference to a scheduler
+        SchedulerFactory sf = new StdSchedulerFactory();
+        Scheduler sched = sf.getScheduler();
+
+        JobDetail job = newJob(TriggerEchoJob.class)
+            .withIdentity("TriggerEchoJob")
+            .build();
+            
+        Date startTime = futureDate(5, IntervalUnit.SECOND);
+        
+        Trigger trigger1 = newTrigger()
+            .withIdentity("Priority7 Trigger5SecondRepeat")
+            .startAt(startTime)
+            .withSchedule(simpleSchedule().withRepeatCount(1).withIntervalInSeconds(5))
+            .withPriority(7)
+            .forJob(job)
+            .build();
+
+        Trigger trigger2 = newTrigger()
+            .withIdentity("Priority5 Trigger10SecondRepeat")
+            .startAt(startTime)
+            .withPriority(5)
+            .withSchedule(simpleSchedule().withRepeatCount(1).withIntervalInSeconds(5))
+            .forJob(job)
+            .build();
+        
+        Trigger trigger3 = newTrigger()
+            .withIdentity("Priority10 Trigger15SecondRepeat")
+            .startAt(startTime)
+            .withSchedule(simpleSchedule().withRepeatCount(1).withIntervalInSeconds(5))
+            .withPriority(10)
+            .forJob(job)
+            .build();
+
+        // Tell quartz to schedule the job using our trigger
+        sched.scheduleJob(job, trigger1);
+        sched.scheduleJob(trigger2);
+        sched.scheduleJob(trigger3);
+
+        sched.start();
+
+        log.info("------- Waiting 30 seconds... -------------");
+        try {
+            Thread.sleep(30L * 1000L); 
+            // executing...
+        } catch (Exception e) {
+        }
+
+        sched.shutdown(true);
+    }
+
+    public static void main(String[] args) throws Exception {
+        PriorityExample example = new PriorityExample();
+        example.run();
+    }
+}
+```
 
 
 
-
-
+------------------------
+(笔记内容大部分来源: https://www.cnblogs.com/daxin/archive/2013/05/27/3101972.html)
 
 
 
