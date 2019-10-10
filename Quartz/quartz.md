@@ -366,26 +366,226 @@ catch (Exception e) {
 ```
 
 
+### Quartz Scheduler与Spring集成(一) 基础配置与常见问题
+https://www.cnblogs.com/daxin/archive/2013/05/29/3107178.html
+
+常用操作代码:
+http://www.quartz-scheduler.org/documentation/quartz-2.3.0/cookbook/MultipleSchedulers.html
+
+### Quartz How-To:Defining a Job (with input data)
+Job:
+```java
+public class PrintPropsJob implements Job {
+
+	public PrintPropsJob() {
+		// Instances of Job must have a public no-argument constructor.
+	}
+
+	public void execute(JobExecutionContext context)
+			throws JobExecutionException {
+
+		JobDataMap data = context.getMergedJobDataMap();
+		System.out.println("someProp = " + data.getString("someProp"));
+	}
+
+}
+
+```
+
+Define job instance:
+
+```java
+JobDetail job1 = newJob(MyJobClass.class)
+    .withIdentity("job1", "group1")		//标识任务
+    .usingJobData("someProp", "someValue")		//input data 
+    .build();
+
+```
+
+### Quartz How-To: Scheduling a Job
+```java
+// Define job instance
+JobDetail job1 = newJob(ColorJob.class)
+    .withIdentity("job1", "group1")
+    .build();
+
+// Define a Trigger that will fire "now", and not repeat
+Trigger trigger = newTrigger()
+    .withIdentity("trigger1", "group1")
+    .startNow()
+    .build();
+
+// Schedule the job with the trigger
+sched.scheduleJob(job, trigger);
+
+```
+
+
+
+### How-To: Update an existing job
+```java
+   
+// Add the new job to the scheduler, instructing it to "replace"
+//  the existing job with the given name and group (if any)
+JobDetail job1 = newJob(MyJobClass.class)
+    .withIdentity("job1", "group1")
+    .build();
+
+// store, and set overwrite flag to 'true'     
+scheduler.addJob(job1, true);
+
+```
+
+### How-To: Updating a trigger
+有一些业务场景，我们需要手动去更新任务的触发时间，比如某个任务是每隔10分钟触发一次，现在需要改成每隔20分钟触发一次，这样既就需要手动的更新触发器
+官方的例子:
+http://www.quartz-scheduler.org/documentation/quartz-2.1.x/cookbook/UpdateTrigger 
+
+Replacing a trigger 替换触发器，通过triggerkey移除旧的触发器，同时添加一个新的进去。
+
+```java
+// Define a new Trigger 
+Trigger trigger = newTrigger()
+    .withIdentity("newTrigger", "group1")
+    .startNow()
+    .build();
+
+// tell the scheduler to remove the old trigger with the given key, and put the new one in its place
+sched.rescheduleJob(triggerKey("oldTrigger", "group1"), trigger);
+```
+
+但是有一个地方需要注意：sched.rescheduleJob(triggerKey("oldTrigger", "group1"), trigger); 这个方法返回一个Date.
+
+如果返回 null 说明替换失败，原因就是旧触发器没有找到，所以新的触发器也不会设置进去.
 
 
 
 
+### How-To: Using Job Listeners
+Quartz Scheduler 可以对Job(任务)建立一个监听器，分别对任务执行 之前-之后-取消 3个状态进行监听。 
+
+实现监听器需要实现JobListener接口，然后注册到Scheduler上就可以了。
+
+一：首先写一个监听器实现类
+```java
+package com.gary.operation.jobdemo.example1;
+
+import org.quartz.JobExecutionContext;
+import org.quartz.JobExecutionException;
+import org.quartz.JobListener;
+
+public class MyJobListener implements JobListener {
+
+    @Override
+    public String getName() {
+        return "MyJobListener";
+    }
+
+    /**
+     * (1)
+     * 任务执行之前执行
+     * Called by the Scheduler when a JobDetail is about to be executed (an associated Trigger has occurred).
+     */
+    @Override
+    public void jobToBeExecuted(JobExecutionContext context) {
+        System.out.println("MyJobListener.jobToBeExecuted()");
+    }
+
+    /**
+     * (2)
+     * 这个方法正常情况下不执行,但是如果当TriggerListener中的vetoJobExecution方法返回true时,那么执行这个方法.
+     * 需要注意的是 如果方法(2)执行 那么(1),(3)这个俩个方法不会执行,因为任务被终止了嘛.
+     * Called by the Scheduler when a JobDetail was about to be executed (an associated Trigger has occurred),
+     * but a TriggerListener vetoed it's execution.
+     */
+    @Override
+    public void jobExecutionVetoed(JobExecutionContext context) {
+        System.out.println("MyJobListener.jobExecutionVetoed()");
+    }
+
+    /**
+     * (3)
+     * 任务执行完成后执行,jobException如果它不为空则说明任务在执行过程中出现了异常
+     * Called by the Scheduler after a JobDetail has been executed, and be for the associated Trigger's triggered(xx) method has been called.
+     */
+    @Override
+    public void jobWasExecuted(JobExecutionContext context,
+            JobExecutionException jobException) {
+        System.out.println("MyJobListener.jobWasExecuted()");
+    }
+
+}
+```
+
+二：将这个监听器注册到Scheduler
+假设有一个任务的key是 job1与 group1
+```java
+// define the job and tie it to our HelloJob class
+        JobDetail job = newJob(HelloJob.class)
+            .withIdentity("job1", "group1")
+            .build();
+``` 
+
+```java
+全局注册,所有Job都会起作用
+Registering A JobListener With The Scheduler To Listen To All Jobs
+sched.getListenerManager().addJobListener(new MyJobListener());
+```
+
+ 
+```java
+指定具体的任务
+Registering A JobListener With The Scheduler To Listen To A Specific Job
+Matcher<JobKey> matcher = KeyMatcher.keyEquals(new JobKey("job1", "group1"));
+sched.getListenerManager().addJobListener(new MyJobListener(), matcher);
+```
+```java
+指定一组任务
+Registering A JobListener With The Scheduler To Listen To All Jobs In a Group
+GroupMatcher<JobKey> matcher = GroupMatcher.jobGroupEquals("group1");
+sched.getListenerManager().addJobListener(new MyJobListener(), matcher);
+```
+
+```java
+可以根据组的名字匹配开头和结尾或包含
+GroupMatcher<JobKey> matcher = GroupMatcher.groupStartsWith("g");
+GroupMatcher<JobKey> matcher = GroupMatcher.groupContains("g");
+sched.getListenerManager().addJobListener(new MyJobListener(), matcher);
+```
 
 
+### How-To: Trigger That Executes Every Day
+Using CronTrigger
+```java
+ trigger = newTrigger()
+    .withIdentity("trigger3", "group1")
+    .startNow()
+    .withSchedule(dailyAtHourAndMinute(15, 0)) // fire every day at 15:00
+    .build();
 
+```
 
+Using SimpleTrigger
+```java
+trigger = newTrigger()
+    .withIdentity("trigger3", "group1")
+    .startAt(tomorrowAt(15, 0, 0)  // first fire time 15:00:00 tomorrow
+    .withSchedule(simpleSchedule()
+            .withIntervalInHours(24) // interval is actually set at 24 hours' worth of milliseconds
+            .repeatForever())
+    .build();
+```
 
+Using CalendarIntervalTrigger
+```java
+trigger = newTrigger()
+    .withIdentity("trigger3", "group1")
+    .startAt(tomorrowAt(15, 0, 0)  // 15:00:00 tomorrow
+    .withSchedule(calendarIntervalSchedule()
+            .withIntervalInDays(1)) // interval is set in calendar days
+    .build();
 
-
-
-
-
-
-
-
-
-
-
+```
 
 
 
