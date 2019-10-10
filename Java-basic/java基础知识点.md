@@ -516,14 +516,40 @@ ReentrantLock相比synchronized，因为可以像普通对象一样使用，所�
 条件变量最为典型的应用场景就是标准类库中的ArrayBlockingQueue等。
 
 
+### synchronized底层如何实现？什么是锁的升级、降级？
+synchronized代码块是由一对儿monitorenter/monitorexit指令实现的， Monitor对象是同步的基本实现单元。
+
+在Java 6之前， Monitor的实现完全是依靠操作系统内部的互斥锁，因为需要进行用户态到内核态的切换，所以同步操作是一个无差别的重量级操作。
+
+现代的（ Oracle） JDK中， JVM对此进行了大刀阔斧地改进，提供了三种不同的Monitor实现，也就是常说的三种不同的锁：偏斜锁（ Biased Locking）、轻量级锁和重量级锁，大
+大改进了其性能。
+
+所谓锁的升级、降级，就是JVM优化synchronized运行的机制，当JVM检测到不同的竞争状况时，会自动切换到适合的锁实现，这种切换就是锁的升级、降级。
+当没有竞争出现时，默认会使用偏斜锁。 JVM会利用CAS操作（ compare and swap），在对象头上的Mark Word部分设置线程ID，以表示这个对象偏向于当前线程，所以并不涉
+及真正的互斥锁。这样做的假设是基于在很多应用场景中，大部分对象生命周期中最多会被一个线程锁定，使用偏斜锁可以降低无竞争开销。
+
+如果有另外的线程试图锁定某个已经被偏斜过的对象， JVM就需要撤销（ revoke）偏斜锁，并切换到轻量级锁实现。轻量级锁依赖CAS操作Mark Word来试图获取锁，如果重试成
+功，就使用普通的轻量级锁；否则，进一步升级为重量级锁。
+
+我注意到有的观点认为Java不会进行锁降级。实际上据我所知，锁降级确实是会发生的，当JVM进入安全点（ SafePoint）的时候，会检查是否有闲置的Monitor，然后试图进行降
+级。 
 
 
+Java核心类库中还有其他一些特别的锁类型，具体请参考下面的图。
+![在这里插入图片描述](https://img-blog.csdnimg.cn/20191010100647506.png?x-oss-process=image/watermark,type_ZmFuZ3poZW5naGVpdGk,shadow_10,text_aHR0cHM6Ly9ibG9nLmNzZG4ubmV0L1NoZWxsZXlMaXR0bGVoZXJv,size_16,color_FFFFFF,t_70)
 
+这些锁竟然不都是实现了Lock接口， ReadWriteLock是一个单独的接口，它通常是代表了一对儿锁，分别对应只读和写操作，标准类库中提供了再入版本的读写
+锁实现（ ReentrantReadWriteLock），对应的语义和ReentrantLock比较相似。
 
+StampedLock竟然也是个单独的类型，从类图结构可以看出它是不支持再入性的语义的，也就是它不是以持有锁的线程为单位。
 
+为什么我们需要读写锁（ ReadWriteLock）等其他锁呢？
 
+这是因为，虽然ReentrantLock和synchronized简单实用，但是行为上有一定局限性，通俗点说就是“太霸道”，要么不占，要么独占。实际应用场景中，有的时候不需要大量竞争
+的写操作，而是以并发读取为主，如何进一步优化并发操作的粒度呢？
 
-
+Java并发包提供的读写锁等扩展了锁的能力，它所基于的原理是多个读操作是不需要互斥的，因为读操作并不会更改数据，所以不存在互相干扰。而写操作则会导致并发一致性的问
+题，所以写线程之间、读写线程之间，需要精心设计的互斥逻辑。
 
 
 
