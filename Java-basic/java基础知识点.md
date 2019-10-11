@@ -645,12 +645,20 @@ Java的线程是不允许启动两次的，第二次调用必然会抛出Illegal
 - 各种线程安全的容器，比如最常见的ConcurrentHashMap、有序的ConcunrrentSkipListMap，或者通过类似快照机制，实现线程安全的动态数
 组CopyOnWriteArrayList等。
 - 各种并发队列实现，如各种BlockedQueue实现，比较典型的ArrayBlockingQueue、 SynchorousQueue或针对特定场景的PriorityBlockingQueue等。
-- 强大的Executor框架，可以创建各种不同类型的线程池，调度任务运行等，绝大部分情况下，不再需要自己从头实现线程池和任务调度器
+- 强大的Executor框架，可以创建各种不同类型的线程池，调度任务运行等，绝大部分情况下，不再需要自己从头实现线程池和任务调度器.
 
+**知识扩展 **
+- CountDownLatch，允许一个或多个线程等待某些操作完成。
+- CyclicBarrier，一种辅助性的同步结构，允许多个线程等待到达某个屏障。
+- Semaphore， Java版本的信号量实现,Semaphore就是个计数器， 其基本逻辑基于acquire/release，并没有太复杂的同步逻辑。
 
-
-
-
+下面，来看看CountDownLatch和CyclicBarrier，它们的行为有一定的相似度，经常会被考察二者有什么区别，我来简单总结一下。
+- CountDownLatch是不可以重置的，所以无法重用；而CyclicBarrier则没有这种限制，可以重用。
+- CountDownLatch的基本操作组合是countDown/await。调用await的线程阻塞等待countDown足够的次数，不管你是在一个线程还是多个线程里countDown，只要次数足够
+即可。所以就像Brain Goetz说过的， CountDownLatch操作的是事件。
+- CyclicBarrier的基本操作组合，则就是await，当所有的伙伴（ parties）都调用了await，才会继续进行任务，并自动进行重置。 注意，正常情况下， CyclicBarrier的重置都是自
+动发生的，如果我们调用reset方法，但还有线程在等待，就会导致等待线程被打扰，抛出BrokenBarrierException异常。 CyclicBarrier侧重点是线程，而不是调用事件，它的
+典型应用场景是用来等待并发线程结束。
 
 
 
