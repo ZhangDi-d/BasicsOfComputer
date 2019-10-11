@@ -1,4 +1,6 @@
 ## Java-Basic ## 
+<br/>
+
 ### 谈谈final、 finally、 finalize有什么不同？
 **典型回答:**
 final可以用来修饰类、方法、变量，分别有不同的意义， final修饰的class代表不可以继承扩展， final的变量是不可以修改的，而final的方法也是不可以重写的（ override）。
@@ -8,6 +10,7 @@ finally则是Java保证重点代码一定要被执行的一种机制。我们可
 finalize是基础类java.lang.Object的一个方法，它的设计目的是保证对象在被垃圾收集前完成特定资源的回收。 finalize机制现在已经不推荐使用，并且在JDK 9开始被标记
 为deprecated。 
 
+<br/>
 
 ### 强引用、软引用、弱引用、幻象引用有什么区别？具体使用场景是什么？
 不同的引用类型，主要体现的是对象不同的可达性（ reachable）状态和对垃圾收集的影响。
@@ -26,6 +29,7 @@ ThreadLocal中entry的Key是弱引用的例子.
 
 对于幻象引用，有时候也翻译成虚引用，你不能通过它访问对象。幻象引用仅仅是提供了一种确保对象被fnalize以后，做某些事情的机制，比如，通常用来做所谓的PostMortem清理机制，我在专栏上一讲中介绍的Java平台自身Cleaner机制等，也有人利用幻象引用监控对象的创建和销毁。
 
+<br/>
 
 ### 理解Java的字符串， String、 StringBufer、 StringBuilder有什么区别？
 String是Java语言非常基础和重要的类，提供了构造和管理字符串的各种基本逻辑。它是典型的Immutable类，被声明成为fnal class，所有属性也都是fnal的。也由于它的不可
@@ -42,6 +46,8 @@ String是Immutable类的典型实现，原生的保证了基础线程安全，�
 为了实现修改字符序列的目的， StringBufer和StringBuilder底层都是利用可修改的（ char， JDK 9以后是byte）数组，二者都继承了AbstractStringBuilder，里面包含了基本
 操作，区别仅在于最终的方法是否加了synchronized。
 
+<br/>
+
 ### 谈谈Java反射机制，动态代理是基于什么原理？
 **典型回答:**
 反射机制是Java语言提供的一种基础功能，赋予程序在运行时自省（ introspect，官方用语）的能力。通过反射我们可以直接操作类或者对象，比如获取某个对象的类定义，获取类
@@ -56,6 +62,7 @@ String是Immutable类的典型实现，原生的保证了基础线程安全，�
 
 cglib动态代理采取的是创建目标类的子类的方式，因为是子类化，我们可以达到近似使用被调用者本身的效果。
 
+<br/>
 
 ### int和Integer有什么区别？谈谈Integer的值缓存范围。
 **典型回答:**
@@ -126,6 +133,7 @@ class CompactCounter {
 - 无法高效地表达数据，也不便于表达复杂的数据结构，比如vector和tuple我们知道Java的对象都是引用类型，如果是一个原始数据类型数组，它在内存里是一段连续的内存，而对象数组则不然，数据存储的是引用，对象往往是分散地存储在堆的不同位
 置。这种设计虽然带来了极大灵活性，但是也导致了数据操作的低效，尤其是无法充分利用现代CPU缓存机制。
 
+<br/>
 
 ### Vector、 ArrayList、 LinkedList有何区别？
 **典型回答:**
@@ -168,6 +176,8 @@ List list = Collections.synchronizedList(new ArrayList());
 数据集中已经排好序的分区（这里叫run），然后合并这些分区来达到排序的目的。
 
 另外， Java 8引入了并行排序算法（直接使用parallelSort方法），这是为了充分利用现代多核处理器的计算能力，底层实现基于fork-join框架，当处理的数据集比较小的时候，差距不明显，甚至还表现差一点；但是，当数据集增长到数万或百万以上时，提高就非常大了，具体还是取决于处理器和系统环境。
+
+<br/>
 
 ### 对比Hashtable、 HashMap、 TreeMap有什么不同？
 
@@ -215,6 +225,7 @@ HashMap不支持线程的同步，即任一时刻可以有多个线程同时写H
 (5)一段话HashMap
 HashMap基于哈希思想，实现对数据的读写。当我们将键值对传递给put()方法时，它调用键对象的hashCode()方法来计算hashcode，让后找到bucket位置来储存值对象。当获取对象时，通过键对象的equals()方法找到正确的键值对，然后返回值对象。 HashMap使用链表来解决碰撞问题，当发生碰撞了，对象将会储存在链表的下一个节点中。 HashMap在每个链表节点中储存键值对对象。当两个不同的键对象的hashcode相同时，它们会储存在同一个bucket位置的链表中，可通过键对象的equals()方法用来找到键值对。如果链表大小超过阈值（TREEIFY_THRESHOLD, 8），链表就会被改造为树形结构。
 
+<br/>
 
 ### 如何保证集合是线程安全的? ConcurrentHashMap如何实现高效地线程安全？
 **典型回答**:
@@ -376,6 +387,8 @@ final V putVal(K key, V value, boolean onlyIfAbsent) {
 **size**
 利用LongAdder累加计算（性能还要高于直接使用AtomicLong）
 
+<br/>
+
 
 ### Java提供了哪些IO方式？ NIO如何实现多路复用？
 **典型回答**
@@ -432,6 +445,7 @@ serverSock.accept(serverSock, new CompletionHandler<>() { //为异步操作指�
 - NIO 同步非阻塞； 
 - AIO 异步非阻塞.
 
+<br/>
 
 ### Java有几种文件拷贝方式？哪一种最高效？
 **典型回答**
@@ -444,6 +458,7 @@ Java有多种比较典型的文件拷贝实现方式，比如：
 对于Copy的效率，这个其实与操作系统和配置等情况相关，总体上来说， NIO transferTo/From的方式可能更快，因为它更能利用现代操作系统底层机制，避免不必要拷贝和上下
 文切换。
 
+<br/>
 
 ### 谈谈接口和抽象类有什么区别？
 **典型回答**
@@ -462,6 +477,7 @@ final的意义；同时，没有非静态方法实现，也就是说要么是抽
 们熟知的Cloneable、 Serializable等。这种用法，也存在于业界其他的Java产品代码中。
 
 
+<br/>
 
 ### 谈谈你知道的设计模式？请手动实现单例模式， Spring等框架中使用了哪些模式？
 **典型回答**
@@ -481,6 +497,7 @@ final的意义；同时，没有非静态方法实现，也就是说要么是抽
 - 各种事件监听器SpringEvent，是观察者模式的典型应用。
 - 类似JdbcTemplate等则是应用了模板模式。
 
+<br/>
 
 ### synchronized和ReentrantLock有什么区别？有人说synchronized最慢，这话靠谱吗？
 **典型回答**
@@ -515,6 +532,7 @@ ReentrantLock相比synchronized，因为可以像普通对象一样使用，所�
 应的对象，将复杂而晦涩的同步操作转变为直观可控的对象行为。
 条件变量最为典型的应用场景就是标准类库中的ArrayBlockingQueue等。
 
+<br/>
 
 ### synchronized底层如何实现？什么是锁的升级、降级？
 synchronized代码块是由一对儿monitorenter/monitorexit指令实现的， Monitor对象是同步的基本实现单元。
@@ -551,15 +569,46 @@ StampedLock竟然也是个单独的类型，从类图结构可以看出它是不
 Java并发包提供的读写锁等扩展了锁的能力，它所基于的原理是多个读操作是不需要互斥的，因为读操作并不会更改数据，所以不存在互相干扰。而写操作则会导致并发一致性的问
 题，所以写线程之间、读写线程之间，需要精心设计的互斥逻辑。
 
+<br/>
 
+### 一个线程两次调用start()方法会出现什么情况？谈谈线程的生命周期和状态转移。
+**典型回答**
+Java的线程是不允许启动两次的，第二次调用必然会抛出IllegalThreadStateException，这是一种运行时异常，多次调用start被认为是编程错误。
 
+关于线程生命周期的不同状态，在Java 5以后，线程状态被明确定义在其公共内部枚举类型java.lang.Thread.State中，分别是：
+- 新建（ NEW），表示线程被创建出来还没真正启动的状态，可以认为它是个Java内部状态。
+- 就绪（ RUNNABLE），表示该线程已经在JVM中执行，当然由于执行需要计算资源，它可能是正在运行，也可能还在等待系统分配给它CPU片段，在就绪队列里面排队。
+- 在其他一些分析中，会额外区分一种状态RUNNING，但是从Java API的角度，并不能表示出来。
+- 阻塞（ BLOCKED），这个状态和我们前面两讲介绍的同步非常相关，阻塞表示线程在等待Monitor lock。比如，线程试图通过synchronized去获取某个锁，但是其他线程已经
+独占了，那么当前线程就会处于阻塞状态。
+- 等待（ WAITING），表示正在等待其他线程采取某些操作。一个常见的场景是类似生产者消费者模式，发现任务条件尚未满足，就让当前消费者线程等待（ wait），另外的生产
+者线程去准备任务数据，然后通过类似notify等动作，通知消费线程可以继续工作了。 Thread.join()也会令线程进入等待状态。
+- 计时等待（ TIMED_WAIT），其进入条件和等待状态类似，但是调用的是存在超时条件的方法，比如wait或join等方法的指定超时版本，如下面示例：
+>public fnal native void wait(long timeout) throws InterruptedException;
 
+- 终止（ TERMINATED），不管是意外退出还是正常执行结束，线程已经完成使命，终止运行，也有人把这个状态叫作死亡。
+在第二次调用start()方法的时候，线程可能处于终止或者其他（非NEW）状态，但是不论如何，都是不可以再次启动的。
 
+**知识扩展**
 
+1.首先，我们来整体看一下线程是什么？
 
+从操作系统的角度，可以简单认为，线程是系统调度的最小单元，一个进程可以包含多个线程，作为任务的真正运作者，有自己的栈（ Stack）、寄存器（ Register）、本地存储
+（ Thread Local）等，但是会和进程内其他线程共享文件描述符、虚拟地址空间等。
 
+2.从线程生命周期的状态开始展开，那么在Java编程中，有哪些因素可能影响线程的状态呢？主要有：
 
+- 线程自身的方法，除了start，还有多个join方法，等待线程结束； yield是告诉调度器，主动让出CPU；另外，就是一些已经被标记为过时的resume、 stop、 suspend之类，据
+我所知，在JDK最新版本中， destory/stop方法将被直接移除。
+- 基类Object提供了一些基础的wait/notify/notifyAll方法。如果我们持有某个对象的Monitor锁，调用wait会让当前线程处于等待状态，直到其他线程notify或者notifyAll。所
+以，本质上是提供了Monitor的获取和释放的能力，是基本的线程间通信方式。
+- 并发类库中的工具，比如CountDownLatch.await()会让当前线程进入等待状态，直到latch被基数为0，这可以看作是线程间通信的Signal。
 
+![在这里插入图片描述](https://img-blog.csdnimg.cn/20191011145236970.png?x-oss-process=image/watermark,type_ZmFuZ3poZW5naGVpdGk,shadow_10,text_aHR0cHM6Ly9ibG9nLmNzZG4ubmV0L1NoZWxsZXlMaXR0bGVoZXJv,size_16,color_FFFFFF,t_70)
+
+<br/>
+
+### 什么情况下Java程序会产生死锁？如何定位、修复？
 
 
 
