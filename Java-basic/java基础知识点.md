@@ -675,12 +675,75 @@ https://www.cnblogs.com/klbc/p/9500947.html
 
 
 下面，来看看CountDownLatch和CyclicBarrier，它们的行为有一定的相似度，经常会被考察二者有什么区别，我来简单总结一下。
+
 - CountDownLatch是不可以重置的，所以无法重用；而CyclicBarrier则没有这种限制，可以重用。
 - CountDownLatch的基本操作组合是countDown/await。调用await的线程阻塞等待countDown足够的次数，不管你是在一个线程还是多个线程里countDown，只要次数足够
 即可。所以就像Brain Goetz说过的， CountDownLatch操作的是事件。
 - CyclicBarrier的基本操作组合，则就是await，当所有的伙伴（ parties）都调用了await，才会继续进行任务，并自动进行重置。 注意，正常情况下， CyclicBarrier的重置都是自
 动发生的，如果我们调用reset方法，但还有线程在等待，就会导致等待线程被打扰，抛出BrokenBarrierException异常。 CyclicBarrier侧重点是线程，而不是调用事件，它的
 典型应用场景是用来等待并发线程结束。
+
+**CountDownLatch**
+模拟五个线程同时启动:
+```java
+	public static void main(String[] args) {
+		
+		//所有线程阻塞，然后统一开始
+		CountDownLatch begin = new CountDownLatch(1);
+		
+		//主线程阻塞，直到所有分线程执行完毕
+		CountDownLatch end = new CountDownLatch(5);
+		
+		for(int i = 0; i < 5; i++){
+			Thread thread = new Thread(new Runnable() {
+				
+				@Override
+				public void run() {
+					try {
+						begin.await();
+						System.out.println(Thread.currentThread().getName() + " 起跑");
+						Thread.sleep(1000);
+						System.out.println(Thread.currentThread().getName() + " 到达终点");
+						end.countDown();
+					} catch (InterruptedException e) {
+						e.printStackTrace();
+					}
+					
+				}
+			});
+			
+			thread.start();
+		}
+		
+		try {
+			System.out.println("1秒后统一开始");
+			Thread.sleep(1000);
+			begin.countDown();
+ 
+			end.await();
+			System.out.println("停止比赛");
+		} catch (InterruptedException e) {
+			e.printStackTrace();
+		}
+		
+	}
+```
+结果:
+```java
+1秒后统一开始
+Thread-1 起跑
+Thread-4 起跑
+Thread-3 起跑
+Thread-0 起跑
+Thread-2 起跑
+Thread-3 到达终点
+Thread-0 到达终点
+Thread-4 到达终点
+Thread-1 到达终点
+Thread-2 到达终点
+停止比赛
+
+```
 
 
 并发包里提供的线程安全Map、 List和Set:
@@ -696,11 +759,30 @@ SkipList结构:
 
 关于两个CopyOnWrite容器，其实CopyOnWriteArraySet是通过包装了CopyOnWriteArrayList来实现的，所以在学习时，我们可以专注于理解一种。
 
-首先， CopyOnWrite到底是什么意思呢？它的原理是，任何修改操作，如add、 set、 remove，都会拷贝原数组，修改后替换原来的数组，通过这种防御性的方式，实现另类的线
-程安全。
+首先， CopyOnWrite到底是什么意思呢？它的原理是，任何修改操作，如add、 set、 remove，都会拷贝原数组，修改后替换原来的数组，通过这种防御性的方式，实现另类的线程安全。
+
+```java
+public boolean add(E e) {
+	synchronized (lock) {
+		Object[] elements = getArray();
+		int len = elements.length;
+		// 拷贝
+		Object[] newElements = Arrays.copyOf(elements, len + 1);
+		newElements[len] = e;
+		// 替换
+		setArray(newElements);
+		return true;
+	}
+}
+final void setArray(Object[] a) {
+	array = a;
+}
+```
 
 
+<br/>
 
+### 并发包中的ConcurrentLinkedQueue和LinkedBlockingQueue有什么区别？
 
 
 
