@@ -652,6 +652,28 @@ Java的线程是不允许启动两次的，第二次调用必然会抛出Illegal
 - CyclicBarrier，一种辅助性的同步结构，允许多个线程等待到达某个屏障。
 - Semaphore， Java版本的信号量实现,Semaphore就是个计数器， 其基本逻辑基于acquire/release，并没有太复杂的同步逻辑。
 
+**Semaphore**
+
+1.工作原理
+
+以一个停车场是运作为例。为了简单起见，假设停车场只有三个车位，一开始三个车位都是空的。这时如果同时来了五辆车，看门人允许其中三辆不受阻碍的进入，然后放下车拦，剩下的车则必须在入口等待，此后来的车也都不得不在入口处等待。这时，有一辆车离开停车场，看门人得知后，打开车拦，放入一辆，如果又离开两辆，则又可以放入两辆，如此往复。这个停车系统中，每辆车就好比一个线程，看门人就好比一个信号量，看门人限制了可以活动的线程。假如里面依然是三个车位，但是看门人改变了规则，要求每次只能停两辆车，那么一开始进入两辆车，后面得等到有车离开才能有车进入，但是得保证最多停两辆车。对于Semaphore类而言，就如同一个看门人，限制了可活动的线程数。
+
+2.主要方法
+
+- Semaphore(int permits):构造方法，创建具有给定许可数的计数信号量并设置为非公平信号量。
+- Semaphore(int permits,boolean fair):构造方法，当fair等于true时，创建具有给定许可数的计数信号量并设置为公平信号量。
+- void acquire():从此信号量获取一个许可前线程将一直阻塞。相当于一辆车占了一个车位。
+- void acquire(int n):从此信号量获取给定数目许可，在提供这些许可前一直将线程阻塞。比如n=2，就相当于一辆车占了两个车位。
+- void release():释放一个许可，将其返回给信号量。就如同车开走返回一个车位。
+- void release(int n):释放n个许可。
+- int availablePermits()：当前可用的许可数。
+
+3. 更多
+
+https://www.cnblogs.com/klbc/p/9500947.html
+
+
+
 下面，来看看CountDownLatch和CyclicBarrier，它们的行为有一定的相似度，经常会被考察二者有什么区别，我来简单总结一下。
 - CountDownLatch是不可以重置的，所以无法重用；而CyclicBarrier则没有这种限制，可以重用。
 - CountDownLatch的基本操作组合是countDown/await。调用await的线程阻塞等待countDown足够的次数，不管你是在一个线程还是多个线程里countDown，只要次数足够
@@ -659,6 +681,40 @@ Java的线程是不允许启动两次的，第二次调用必然会抛出Illegal
 - CyclicBarrier的基本操作组合，则就是await，当所有的伙伴（ parties）都调用了await，才会继续进行任务，并自动进行重置。 注意，正常情况下， CyclicBarrier的重置都是自
 动发生的，如果我们调用reset方法，但还有线程在等待，就会导致等待线程被打扰，抛出BrokenBarrierException异常。 CyclicBarrier侧重点是线程，而不是调用事件，它的
 典型应用场景是用来等待并发线程结束。
+
+
+并发包里提供的线程安全Map、 List和Set:
+
+![在这里插入图片描述](https://img-blog.csdnimg.cn/20191012143046896.png?x-oss-process=image/watermark,type_ZmFuZ3poZW5naGVpdGk,shadow_10,text_aHR0cHM6Ly9ibG9nLmNzZG4ubmV0L1NoZWxsZXlMaXR0bGVoZXJv,size_16,color_FFFFFF,t_70)
+
+如果我们的应用侧重于Map放入或者获取的速度，而不在乎顺序，大多推荐使用ConcurrentHashMap，反之则使
+用ConcurrentSkipListMap；如果我们需要对大量数据进行非常频繁地修改， ConcurrentSkipListMap也可能表现出优势。
+
+SkipList结构:
+
+![在这里插入图片描述](https://img-blog.csdnimg.cn/20191012143349247.png?x-oss-process=image/watermark,type_ZmFuZ3poZW5naGVpdGk,shadow_10,text_aHR0cHM6Ly9ibG9nLmNzZG4ubmV0L1NoZWxsZXlMaXR0bGVoZXJv,size_16,color_FFFFFF,t_70)
+
+关于两个CopyOnWrite容器，其实CopyOnWriteArraySet是通过包装了CopyOnWriteArrayList来实现的，所以在学习时，我们可以专注于理解一种。
+
+首先， CopyOnWrite到底是什么意思呢？它的原理是，任何修改操作，如add、 set、 remove，都会拷贝原数组，修改后替换原来的数组，通过这种防御性的方式，实现另类的线
+程安全。
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
