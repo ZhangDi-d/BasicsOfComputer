@@ -784,14 +784,30 @@ final void setArray(Object[] a) {
 <br/>
 
 ### 并发包中的ConcurrentLinkedQueue和LinkedBlockingQueue有什么区别？
-20191017
+**典型回答**
+
+有时候我们把并发包下面的所有容器都习惯叫作并发容器，但是严格来讲，类似ConcurrentLinkedQueue这种“Concurrent*”容器，才是真正代表并发。
+
+关于问题中它们的区别：
+- Concurrent类型基于lock-free，在常见的多线程访问场景，一般可以提供较高吞吐量。
+- 而LinkedBlockingQueue内部则是基于锁，并提供了BlockingQueue的等待性方法。
+
+不知道你有没有注意到， java.util.concurrent包提供的容器（ Queue、 List、 Set）、 Map，从命名上可以大概区分为Concurrent、 CopyOnWrite和Blocking*等三类，同样是线
+程安全容器，可以简单认为：
+
+- Concurrent类型没有类似CopyOnWrite之类容器相对较重的修改开销。
+- 但是，凡事都是有代价的， Concurrent往往提供了较低的遍历一致性。你可以这样理解所谓的弱一致性，例如，当利用迭代器遍历时，如果容器发生修改，迭代器仍然可以继续
+进行遍历。
+- 与弱一致性对应的，就是我介绍过的同步容器常见的行为“fast-fail”，也就是检测到容器在遍历过程中发生了修改，则抛出ConcurrentModifcationException，不再继续遍历。
+- 弱一致性的另外一个体现是， size等操作准确性是有限的，未必是100%准确。
+- 与此同时，读取的性能具有一定的不确定性。
 
 
+**知识扩展**
 
+**线程安全队列一览:**
 
-
-
-
+![在这里插入图片描述](https://img-blog.csdnimg.cn/20191018163501881.png?x-oss-process=image/watermark,type_ZmFuZ3poZW5naGVpdGk,shadow_10,text_aHR0cHM6Ly9ibG9nLmNzZG4ubmV0L1NoZWxsZXlMaXR0bGVoZXJv,size_16,color_FFFFFF,t_70)
 
 
 
