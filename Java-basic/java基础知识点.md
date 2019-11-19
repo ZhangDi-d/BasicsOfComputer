@@ -923,18 +923,66 @@ ArrayBlockingQueue实现比较简单，性能更好预测，属于表现稳定�
 通常开发者都是利用Executors提供的通用线程池创建方法，去创建不同配置的线程池，主要区别在于不同的ExecutorService类型或者不同的初始参数。
 Executors目前提供了5种不同的线程池创建配置：
 
+newCachedThreadPool()，它是一种用来处理大量短时间工作任务的线程池，具有几个鲜明特点：它会试图缓存线程并重用，当无缓存线程可用时，就会创建新的工作线程；如
+果线程闲置的时间超过60秒，则被终止并移出缓存；长时间闲置时，这种线程池，不会消耗什么资源。其内部使用SynchronousQueue作为工作队列。
+
+newFixedThreadPool(int nThreads)，重用指定数目（ nThreads）的线程，其背后使用的是无界的工作队列，任何时候最多有nThreads个工作线程是活动的。这意味着，如
+果任务数量超过了活动队列数目，将在工作队列中等待空闲线程出现；如果有工作线程退出，将会有新的工作线程被创建，以补足指定的数目nThreads。
+
+newSingleThreadExecutor()，它的特点在于工作线程数目被限制为1，操作一个无界的工作队列，所以它保证了所有任务的都是被顺序执行，最多会有一个任务处于活动状
+态，并且不允许使用者改动线程池实例，因此可以避免其改变线程数目。
+
+newSingleThreadScheduledExecutor()和newScheduledThreadPool(int corePoolSize)，创建的是个ScheduledExecutorService，可以进行定时或周期性的工作调度，
+区别在于单一工作线程还是多个工作线程。
+
+ewWorkStealingPool(int parallelism)，这是一个经常被人忽略的线程池， Java 8才加入这个创建方法，其内部会构建ForkJoinPool，利用Work-Stealing算法，并行地处
+理任务，不保证处理顺序。
 
 
+Executor框架可不仅仅是线程池，我觉得至少下面几点值得深入学习：
+- 掌握Executor框架的主要内容，至少要了解组成与职责，掌握基本开发用例中的使用。
+- 对线程池和相关并发工具类型的理解，甚至是源码层面的掌握。
+- 实践中有哪些常见问题，基本的诊断思路是怎样的。
+- 如何根据自身应用特点合理使用线程池。
+
+**知识扩展**
+首先，我们来看看Executor框架的基本组成，请参考下面的类图。
+
+![在这里插入图片描述](https://img-blog.csdnimg.cn/20191119162743953.png?x-oss-process=image/watermark,type_ZmFuZ3poZW5naGVpdGk,shadow_10,text_aHR0cHM6Ly9ibG9nLmNzZG4ubmV0L1NoZWxsZXlMaXR0bGVoZXJv,size_16,color_FFFFFF,t_70)
+
+Executor是一个基础的接口，其初衷是将任务提交和任务执行细节解耦，这一点可以体会其定义的唯一方法。
+```
+void execute(Runnable command);
+```
+ExecutorService则更加完善，不仅提供service的管理功能，比如shutdown等方法，也提供了更加全面的提交任务机制，如返回Future而不是void的submit方法。
+```
+<T> Future<T> submit(Callable<T> task);
+```
+
+从源码角度，分析线程池的设计与实现，我将主要围绕最基础的ThreadPoolExecutor源码:
+
+![](https://img-blog.csdnimg.cn/2019111916342758.png?x-oss-process=image/watermark,type_ZmFuZ3poZW5naGVpdGk,shadow_10,text_aHR0cHM6Ly9ibG9nLmNzZG4ubmV0L1NoZWxsZXlMaXR0bGVoZXJv,size_16,color_FFFFFF,t_70)
 
 
+简单理解一下：
+- 工作队列负责存储用户提交的各个任务，这个工作队列，可以是容量为0的SynchronousQueue（使用newCachedThreadPool），也可以是像固定大小线程池
+（ newFixedThreadPool）那样使用LinkedBlockingQueue。
+	```
+	private final BlockingQueue<Runnable> workQueue;
+	```
 
+- 内部的“线程池”，这是指保持工作线程的集合，线程池需要在运行过程中管理线程创建、销毁。例如，对于带缓存的线程池，当任务压力较大时，线程池会创建新的工作线程；当
+业务压力退去，线程池会在闲置一段时间（默认60秒）后结束线程。
+	```
+	private final HashSet<Worker> workers = new HashSet<>();
+	```
+	
+线程池的工作线程被抽象为静态内部类Worker，基于AQS实现。
+- ThreadFactory提供上面所需要的创建线程逻辑。
+- 如果任务提交时被拒绝，比如线程池已经处于SHUTDOWN状态，需要为其提供处理逻辑， Java标准库提供了类似ThreadPoolExecutor.AbortPolicy 等默认实现，也可以按照实
+际需求自定义。
 
-
-
-
-
-
-
+从上面的分析，就可以看出线程池的几个基本组成部分，一起都体现在线程池的构造函数中，从字面我们就可以大概猜测到其用意：
 
 
 
