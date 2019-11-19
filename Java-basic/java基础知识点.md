@@ -92,7 +92,7 @@ Integer是int对应的包装类，它有一个int类型的字段存储数据，�
 
 [4] 优先使用基本类型。原则上，建议避免无意中的装箱、拆箱行为，尤其是在性能敏感的场合，
 
-[5] 如果有线程安全的计算需要，建议考虑使用类型AtomicInteger、 AtomicLong 这样的线程安全类。部分比较宽的基本数据类型，比如 foat、 double，甚至不能保证更新操作的原子性，
+[5] 如果有线程安全的计算需要，建议考虑使用类型AtomicInteger、 AtomicLong 这样的线程安全类。部分比较宽的基本数据类型，比如 float、 double，甚至不能保证更新操作的原子性，
 可能出现程序读取到只更新了一半数据位的数值。
 
 
@@ -808,6 +808,142 @@ final void setArray(Object[] a) {
 **线程安全队列一览:**
 
 ![在这里插入图片描述](https://img-blog.csdnimg.cn/20191018163501881.png?x-oss-process=image/watermark,type_ZmFuZ3poZW5naGVpdGk,shadow_10,text_aHR0cHM6Ly9ibG9nLmNzZG4ubmV0L1NoZWxsZXlMaXR0bGVoZXJv,size_16,color_FFFFFF,t_70)
+
+ArrayBlockingQueue是最典型的的有界队列，其内部以final的数组保存数据，数组的大小就决定了队列的边界，所以我们在创建ArrayBlockingQueue时，都要指定容量，如
+```
+public ArrayBlockingQueue(int capacity, boolean fair)
+```
+
+LinkedBlockingQueue，容易被误解为无边界，但其实其行为和内部代码都是基于有界的逻辑实现的，只不过如果我们没有在创建队列时就指定容量，那么其容量限制就自动被
+设置为Integer.MAX_VALUE ，成为了无界队列。
+
+SynchronousQueue，这是一个非常奇葩的队列实现，每个删除操作都要等待插入操作，反之每个插入操作也都要等待删除动作。那么这个队列的容量是多少呢？是1吗？其实不
+是的，其内部容量是0。
+
+PriorityBlockingQueue是无边界的优先队列，虽然严格意义上来讲，其大小总归是要受系统资源影响。
+
+DelayedQueue和LinkedTransferQueue同样是无边界的队列。对于无边界的队列，有一个自然的结果，就是put操作永远也不会发生其他BlockingQueue的那种等待情况。
+
+使用Blocking实现的生产者消费者代码:
+```
+package com.ryze.chapter3;
+
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.BlockingQueue;
+
+public class ConsumerProducer {
+    public static final String EXIT_MSG = "Good bye!";
+
+    public static void main(String[] args) {
+        // 使用较小的队列，以更好地在输出中展示其影响
+        BlockingQueue<String> queue = new ArrayBlockingQueue<>(3);
+        Producer producer = new Producer(queue);
+        Consumer consumer = new Consumer(queue);
+        new Thread(producer).start();
+        new Thread(consumer).start();
+    }
+
+    static class Producer implements Runnable {
+        private BlockingQueue<String> queue;
+
+        public Producer(BlockingQueue<String> q) {
+            this.queue = q;
+        }
+
+        @Override
+        public void run() {
+            for (int i = 0; i < 20; i++) {
+                try {
+                    Thread.sleep(5L);
+                    String msg = "Message" + i;
+                    System.out.println("Produced new item: " + msg);
+                    queue.put(msg);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            }
+            try {
+                System.out.println("Time to say good bye!");
+                queue.put(EXIT_MSG);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+    static class Consumer implements Runnable {
+        private BlockingQueue<String> queue;
+
+        public Consumer(BlockingQueue<String> q) {
+            this.queue = q;
+        }
+
+        @Override
+        public void run() {
+            try {
+                String msg;
+                while (!EXIT_MSG.equalsIgnoreCase((msg = queue.take()))) {
+                    System.out.println("Consumed item: " + msg);
+                    Thread.sleep(10L);
+                }
+                System.out.println("Got exit message, bye!");
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+}
+
+```
+
+
+####前面介绍了各种队列实现，在日常的应用开发中，如何进行选择呢？
+
+以LinkedBlockingQueue、 ArrayBlockingQueue和SynchronousQueue为例，我们一起来分析一下，根据需求可以从很多方面考量：
+
+考虑应用场景中对队列边界的要求。 ArrayBlockingQueue是有明确的容量限制的，而LinkedBlockingQueue则取决于我们是否在创建时指定， SynchronousQueue则干脆不
+能缓存任何元素。
+
+从空间利用角度，数组结构的ArrayBlockingQueue要比LinkedBlockingQueue紧凑，因为其不需要创建所谓节点，但是其初始分配阶段就需要一段连续的空间，所以初始内存
+需求更大。
+
+通用场景中， LinkedBlockingQueue的吞吐量一般优于ArrayBlockingQueue，因为它实现了更加细粒度的锁操作。
+
+ArrayBlockingQueue实现比较简单，性能更好预测，属于表现稳定的“选手”。
+
+如果我们需要实现的是两个线程之间接力性（ handof）的场景，按照专栏上一讲的例子，你可能会选择CountDownLatch，但是SynchronousQueue也是完美符合这种场景
+的，而且线程间协调和数据传输统一起来，代码更加规范。
+
+可能令人意外的是，很多时候SynchronousQueue的性能表现，往往大大超过其他实现，尤其是在队列元素较小的场景。
+
+
+### Java并发类库提供的线程池有哪几种？ 分别有什么特点?
+
+**典型回答**
+通常开发者都是利用Executors提供的通用线程池创建方法，去创建不同配置的线程池，主要区别在于不同的ExecutorService类型或者不同的初始参数。
+Executors目前提供了5种不同的线程池创建配置：
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
