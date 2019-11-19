@@ -984,6 +984,61 @@ ExecutorService则更加完善，不仅提供service的管理功能，比如shut
 
 从上面的分析，就可以看出线程池的几个基本组成部分，一起都体现在线程池的构造函数中，从字面我们就可以大概猜测到其用意：
 
+- corePoolSize，所谓的核心线程数，可以大致理解为长期驻留的线程数目（除非设置了allowCoreThreadTimeOut）。对于不同的线程池，这个值可能会有很大区别，比
+如newFixedThreadPool会将其设置为nThreads，而对于newCachedThreadPool则是为0。
+
+- maximumPoolSize，顾名思义，就是线程不够时能够创建的最大线程数。同样进行对比，对于newFixedThreadPool，当然就是nThreads，因为其要求是固定大小，
+而newCachedThreadPool则是Integer.MAX_VALUE 。
+
+- keepAliveTime和TimeUnit，这两个参数指定了额外的线程能够闲置多久，显然有些线程池不需要它。
+
+- workQueue，工作队列，**必须是BlockingQueue。**
+
+通过配置不同的参数，我们就可以创建出行为大相径庭的线程池，这就是线程池高度灵活性的基础
+
+```
+public ThreadPoolExecutor(int corePoolSize,
+						int maximumPoolSize,
+						long keepAliveTime,
+						TimeUnit unit,
+						BlockingQueue<Runnable> workQueue,
+						ThreadFactory threadFactory,
+						RejectedExecutionHandler handler)
+```
+
+
+###  AtomicInteger底层实现原理是什么？如何在自己的产品代码中应用CAS操作？
+
+**典型回答**
+AtomicIntger是对int类型的一个封装，提供原子性的访问和更新操作，其原子性操作的实现是基于CAS（ compare-and-swap）.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
