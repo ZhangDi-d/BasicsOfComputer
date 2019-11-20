@@ -210,3 +210,4 @@ START WITH sjflid IS NULL
 CONNECT BY sjflid = PRIOR ID;
 ```
 connect_by_isleaf函数用来判断当前节点是否包含下级节点，如果包含的话，说明不是叶子节点，这里返回0；反之，如果不包含下级节点，这里返回1。
+

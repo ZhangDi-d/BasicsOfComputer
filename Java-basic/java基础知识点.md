@@ -1012,6 +1012,198 @@ public ThreadPoolExecutor(int corePoolSize,
 **典型回答**
 AtomicIntger是对int类型的一个封装，提供原子性的访问和更新操作，其原子性操作的实现是基于CAS（ compare-and-swap）.
 
+目前Java提供了两种公共API，可以实现这种CAS操作，比如使用java.util.concurrent.atomic.AtomicLongFieldUpdater，它是基于反射机制创建，我们需要保证类型和字段名称正确。
+
+AQS内部数据和方法，可以简单拆分为：
+- 一个volatile的整数成员表征状态，同时提供了setState和getState方法
+```
+private volatile int sate;
+```
+- 一个先入先出（ FIFO）的等待线程队列，以实现多线程间竞争和等待，这是AQS机制的核心之一。
+- 各种基于CAS的基础操作方法，以及各种期望具体同步结构去实现的acquire/release方法。
+
+利用AQS实现一个同步结构，至少要实现两个基本类型的方法，分别是acquire操作，获取资源的独占权；还有就是release操作，释放对某个资源的独占
+
+排除掉一些细节，整体地分析acquire方法逻辑，其直接实现是在AQS内部，调用了tryAcquire和acquireQueued，这是两个需要搞清楚的基本部分。
+```
+public final void acquire(int arg) {
+if (!tryAcquire(arg) && acquireQueued(addWaiter(Node.EXCLUSIVE), arg))
+	selfInterrupt();
+}
+```
+
+以非公平的tryAcquire为例，其内部实现了如何配合状态与CAS获取锁，注意，对比公平版本的tryAcquire，它在锁无人占有时，并不检查是否有其他等待者，这里体现了非公平的
+语义。
+```
+final boolean nonfairTryAcquire(int acquires) {
+	final Thread current = Thread.currentThread();
+	int c = getState();// 获取当前AQS内部状态量
+	if (c == 0) { // 0表示无人占有，则直接用CAS修改状态位，
+		if (compareAndSetState(0, acquires)) {// 不检查排队情况，直接争抢
+			setExclusiveOwnerThread(current); //并设置当前线程独占锁
+			return true;
+		}
+	} else if (current == getExclusiveOwnerThread()) { //即使状态不是0，也可能当前线程是锁持有者，因为这是再入锁
+		int nextc = c + acquires;
+		if (nextc < 0) // overflow
+			throw new Error("Maximum lock count exceeded");
+		setState(nextc);
+		return true;
+	}
+	return false;
+}
+```
+
+再来分析acquireQueued，如果前面的tryAcquire失败，代表着锁争抢失败，进入排队竞争阶段。这里就是我们所说的，利用FIFO队列，实现线程间对锁的竞争的部分，
+算是是AQS的核心逻辑。
+
+当前线程会被包装成为一个排他模式的节点（ EXCLUSIVE），通过addWaiter方法添加到队列中。 acquireQueued的逻辑，简要来说，就是如果当前节点的前面是头节点，则试图
+获取锁，一切顺利则成为新的头节点；否则，有必要则等待，具体处理逻辑请参考我添加的注释。
+
+```
+final boolean acquireQueued(final Node node, int arg) {
+	boolean interrupted = false;
+	try {
+		for (;;) {// 循环
+			final Node p = node.predecessor();// 获取前一个节点
+			if (p == head && tryAcquire(arg)) { // 如果前一个节点是头结点，表示当前节点合适去tryAcquire
+				setHead(node); // acquire成功，则设置新的头节点
+				p.next = null; // 将前面节点对当前节点的引用清空
+				return interrupted;
+			}
+			if (shouldParkAfterFailedAcquire(p, node)) // 检查是否失败后需要park
+			interrupted |= parkAndCheckInterrupt();
+		}
+	} catch (Throwable t) {
+		cancelAcquire(node);// 出现异常，取消
+		if (interrupted)
+		selfInterrupt();
+		throw t;
+	}
+}
+```
+
+到这里线程试图获取锁的过程基本展现出来了， tryAcquire是按照特定场景需要开发者去实现的部分，而线程间竞争则是AQS通过Waiter队列与acquireQueued提供的，
+在release方法中，同样会对队列进行对应操作.
+
+
+
+
+### 请介绍类加载过程，什么是双亲委派模型？
+
+**典型回答**
+一般来说，我们把Java的类加载过程分为三个主要步骤：加载、链接、初始化，具体行为在Java虚拟机规范里有非常详细的定义。
+
+首先是加载阶段（ Loading），它是Java将字节码数据从不同的数据源读取到JVM中，并映射为JVM认可的数据结构（ Class对象），这里的数据源可能是各种各样的形态，如jar文
+件、 class文件，甚至是网络数据源等；如果输入数据不是ClassFile的结构，则会抛出ClassFormatError。
+加载阶段是用户参与的阶段，我们可以自定义类加载器，去实现自己的类加载过程。
+
+第二阶段是链接（ Linking），这是核心的步骤，简单说是把原始的类定义信息平滑地转化入JVM运行的过程中。这里可进一步细分为三个步骤：
+
+验证（ Verifcation），这是虚拟机安全的重要保障， JVM需要核验字节信息是符合Java虚拟机规范的，否则就被认为是VerifyError，这样就防止了恶意信息或者不合规的信息危
+害JVM的运行，验证阶段有可能触发更多class的加载。
+
+准备（ Preparation），创建类或接口中的静态变量，并初始化静态变量的初始值。但这里的“初始化”和下面的显式初始化阶段是有区别的，侧重点在于分配所需要的内存空间，
+不会去执行更进一步的JVM指令。
+
+解析（ Resolution），在这一步会将常量池中的符号引用（ symbolic reference）替换为直接引用。在Java虚拟机规范中，详细介绍了类、接口、方法和字段等各个方面的解
+析。
+
+最后是初始化阶段（ initialization），这一步真正去执行类初始化的代码逻辑，包括静态字段赋值的动作，以及执行类定义中的静态初始化块内的逻辑，编译器在编译阶段就会把这
+部分逻辑整理好，父类型的初始化逻辑优先于当前类型的逻辑。
+
+再来谈谈双亲委派模型，简单说就是当类加载器（ Class-Loader）试图加载某个类型的时候，除非父加载器找不到相应类型，否则尽量将这个任务代理给当前加载器的父加载器去
+做。使用委派模型的目的是避免重复加载Java类型。
+
+
+通常类加载机制有三个基本特征：
+
+双亲委派模型。但不是所有类加载都遵守这个模型，有的时候，启动类加载器所加载的类型，是可能要加载用户代码的，比如JDK内部的ServiceProvider/ServiceLoader机制，
+用户可以在标准API框架上，提供自己的实现， JDK也需要提供些默认的参考实现。 例如， Java 中JNDI、 JDBC、文件系统、 Cipher等很多方面，都是利用的这种机制，这种情
+况就不会用双亲委派模型去加载，而是利用所谓的上下文加载器。
+
+可见性，子类加载器可以访问父加载器加载的类型，但是反过来是不允许的，不然，因为缺少必要的隔离，我们就没有办法利用类加载器去实现容器的逻辑。
+
+单一性，由于父加载器的类型对于子加载器是可见的，所以父加载器中加载过的类型，就不会在子加载器中重复加载。但是注意，类加载器“邻居”间，同一类型仍然可以被加载多
+次，因为互相并不可见。
+
+
+
+### 谈谈JVM内存区域的划分，哪些区域可能发生OutOfMemoryError？
+
+**典型回答**
+
+通常可以把JVM内存区域分为下面几个方面，其中，有的区域是以线程为单位，而有的区域则是整个JVM进程唯一的。
+
+首先， 程序计数器（ PC， Program Counter Register）。在JVM规范中，每个线程都有它自己的程序计数器，并且任何时间一个线程都只有一个方法在执行，也就是所谓的当前方
+法。程序计数器会存储当前线程正在执行的Java方法的JVM指令地址；或者，如果是在执行本地方法，则是未指定值（ undefned）。
+
+第二， Java虚拟机栈（ Java Virtual Machine Stack），早期也叫Java栈。每个线程在创建时都会创建一个虚拟机栈，其内部保存一个个的栈帧（ Stack Frame），对应着一次次
+的Java方法调用。
+
+前面谈程序计数器时，提到了当前方法；同理，在一个时间点，对应的只会有一个活动的栈帧，通常叫作当前帧，方法所在的类叫作当前类。如果在该方法中调用了其他方法，对应
+的新的栈帧会被创建出来，成为新的当前帧，一直到它返回结果或者执行结束。 JVM直接对Java栈的操作只有两个，就是对栈帧的压栈和出栈。
+栈帧中存储着局部变量表、操作数（ operand）栈、动态链接、方法正常退出或者异常退出的定义等。
+
+第三， 堆（ Heap），它是Java内存管理的核心区域，用来放置Java对象实例，几乎所有创建的Java对象实例都是被直接分配在堆上。堆被所有的线程共享，在虚拟机启动时，我们
+指定的“Xmx”之类参数就是用来指定最大堆空间等指标。
+理所当然，堆也是垃圾收集器重点照顾的区域，所以堆内空间还会被不同的垃圾收集器进行进一步的细分，最有名的就是新生代、老年代的划分。
+
+第四， 方法区（ Method Area）。这也是所有线程共享的一块内存区域，用于存储所谓的元（ Meta）数据，例如类结构信息，以及对应的运行时常量池、字段、方法代码等。
+由于早期的Hotspot JVM实现，很多人习惯于将方法区称为永久代（ Permanent Generation）。 Oracle JDK 8中将永久代移除，同时增加了元数据区（ Metaspace）。
+
+第五， 运行时常量池（ Run-Time Constant Pool），这是方法区的一部分。如果仔细分析过反编译的类文件结构，你能看到版本号、字段、方法、超类、接口等各种信息，还有一
+项信息就是常量池。 Java的常量池可以存放各种常量信息，不管是编译期生成的各种字面量，还是需要在运行时决定的符号引用，所以它比一般语言的符号表存储的信息更加宽泛。
+
+第六， 本地方法栈（ Native Method Stack）。它和Java虚拟机栈是非常相似的，支持对本地方法的调用，也是每个线程都会创建一个。在Oracle Hotspot JVM中，本地方法栈
+和Java虚拟机栈是在同一块儿区域，这完全取决于技术实现的决定，并未在规范中强制。
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
