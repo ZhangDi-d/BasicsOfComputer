@@ -1159,6 +1159,126 @@ final boolean acquireQueued(final Node node, int arg) {
 和Java虚拟机栈是在同一块儿区域，这完全取决于技术实现的决定，并未在规范中强制。
 
 
+![在这里插入图片描述](https://img-blog.csdnimg.cn/20191120165915355.png?x-oss-process=image/watermark,type_ZmFuZ3poZW5naGVpdGk,shadow_10,text_aHR0cHM6Ly9ibG9nLmNzZG4ubmV0L1NoZWxsZXlMaXR0bGVoZXJv,size_16,color_FFFFFF,t_70)
+
+
+**所有的对象实例都是创建在堆上。**
+
+
+除了程序计数器，其他区域都有可能会因为可能的空间不足发生OutOfMemoryError，简单总结如下：
+
+堆内存不足是最常见的OOM原因之一，抛出的错误信息是“java.lang.OutOfMemoryError:Java heap space”，原因可能千奇百怪，例如，可能存在内存泄漏问题；也很有可
+能就是堆的大小不合理，比如我们要处理比较可观的数据量，但是没有显式指定JVM堆大小或者指定数值偏小；或者出现JVM处理引用不及时，导致堆积起来，内存无法释放等。
+
+而对于Java虚拟机栈和本地方法栈，这里要稍微复杂一点。如果我们写一段程序不断的进行递归调用，而且没有退出条件，就会导致不断地进行压栈。类似这种情况， JVM实际会
+抛出StackOverFlowError；当然，如果JVM试图去扩展栈空间的的时候失败，则会抛出OutOfMemoryError。
+
+对于老版本的Oracle JDK，因为永久代的大小是有限的，并且JVM对永久代垃圾回收（如，常量池回收、卸载不再需要的类型）非常不积极，所以当我们不断添加新类型的时
+候，永久代出现OutOfMemoryError也非常多见，尤其是在运行时存在大量动态类型生成的场合；类似Intern字符串缓存占用太多空间，也会导致OOM问题。对应的异常信息，
+会标记出来和永久代相关： “java.lang.OutOfMemoryError: PermGen space”。
+
+随着元数据区的引入，方法区内存已经不再那么窘迫，所以相应的OOM有所改观，出现OOM，异常信息则变成了： “java.lang.OutOfMemoryError: Metaspace”。
+
+直接内存不足，也会导致OOM.
+
+
+**思考**
+我在试图分配一个100M bytes大数组的时候发生了OOME，但是GC日志显示，明明堆上还有远不止100M的空间，你觉得可能问题的原因是什么？想要弄清楚这个问题，还需要什么信息呢？
+
+思路1:
+如果仅从jvm的角度来看，要看下新生代和老年代的垃圾回收机制是什么。如果新生代是serial，会默认使用copying算法，利用两块eden和survivor来进行处理。但是默认当遇到超大对象
+时，会直接将超大对象放置到老年代中，而不用走正常对象的存活次数记录。因为要放置的是一个byte数组，那么必然需要申请连续的空间，当空间不足时，会进行gc操作。这里又需要看老年
+代的gc机制是哪一种。如果是serial old，那么会采用mark compat，会进行整理，从而整理出连续空间，如果还不够，说明是老年代的空间不够，所谓的堆内存大于100m是新+老共同的结
+果。如果采用的是cms(concurrent mark sweep)，那么只会标记清理，并不会压缩，所以内存会碎片化，同时可能出现浮游垃圾。如果是cms的话，即使老年代的空间大于100m，也会出现
+没有连续的空间供该对象使用。
+
+思路2:
+从不同的垃圾收集器角度来看：
+首先，数组的分配是需要连续的内存空间的（据说，有个别非主流JVM支持大数组用不连续的内存空间分配��）。所以：
+1）对于使用年轻代和老年代来管理内存的垃圾收集器，堆大于 100M，表示的是新生代和老年代加起来总和大于100M，而新生代和老年代各自并没有大于 100M 的连续内存空间。
+进一步，又由于大数组一般直接进入老年代（会跳过对对象的年龄的判断），所以，是否可以认为老年代中没有连续大于 100M 的空间呢。
+2）对于 G1 这种按 region 来管理内存的垃圾收集器，可能的情况是没有多个连续的 region，它们的内存总和大于 100M。
+当然，不管是哪种垃圾收集器以及收集算法，当内存空间不足时，都会触发 GC，只不过，可能 GC 之后，还是没有连续大于 100M 的内存空间，于是 OOM了。
+
+
+
+### 如何监控和诊断JVM堆内和堆外内存使用？
+
+**典型回答**
+了解JVM内存的方法有很多，具体能力范围也有区别，简单总结如下：
+
+可以使用综合性的图形化工具，如JConsole、 VisualVM（注意，从Oracle JDK 9开始， VisualVM已经不再包含在JDK安装包中）等。这些工具具体使用起来相对比较直观，直
+接连接到Java进程，然后就可以在图形化界面里掌握内存使用情况。
+
+以JConsole为例，其内存页面可以显示常见的堆内存和各种堆外部分使用状态。
+
+也可以使用命令行工具进行运行时查询，如jstat和jmap等工具都提供了一些选项，可以查看堆、方法区等使用数据。
+
+或者，也可以使用jmap等提供的命令，生成堆转储（ Heap Dump）文件，然后利用jhat或Eclipse MAT等堆转储分析工具进行详细分析。
+
+如果你使用的是Tomcat、 Weblogic等Java EE服务器，这些服务器同样提供了内存管理相关的功能。
+
+另外，从某种程度上来说， GC日志等输出，同样包含着丰富的信息。
+
+
+首先，堆内部是什么结构？
+对于堆内存，我在上一讲介绍了最常见的新生代和老年代的划分，其内部结构随着JVM的发展和新GC方式的引入，可以有不同角度的理解，下图就是年代视角的堆结构示意图。
+
+![在这里插入图片描述](https://img-blog.csdnimg.cn/20191120172351641.png?x-oss-process=image/watermark,type_ZmFuZ3poZW5naGVpdGk,shadow_10,text_aHR0cHM6Ly9ibG9nLmNzZG4ubmV0L1NoZWxsZXlMaXR0bGVoZXJv,size_16,color_FFFFFF,t_70)
+
+
+你可以看到，按照通常的GC年代方式划分， Java堆内分为：
+1.新生代
+
+新生代是大部分对象创建和销毁的区域，在通常的Java应用中，绝大部分对象生命周期都是很短暂的。其内部又分为Eden区域，作为对象初始分配的区域；两个Survivor，有时候
+也叫from、 to区域，被用来放置从Minor GC中保留下来的对象。
+
+JVM会随意选取一个Survivor区域作为“to”，然后会在GC过程中进行区域间拷贝，也就是将Eden中存活下来的对象和from区域的对象，拷贝到这个“to”区域。这种设计主要是为
+了防止内存的碎片化，并进一步清理无用对象。
+
+从内存模型而不是垃圾收集的角度，对Eden区域继续进行划分， Hotspot JVM还有一个概念叫做Thread Local Allocation Bufer（ TLAB），据我所知所有OpenJDK衍生出来
+的JVM都提供了TLAB的设计。这是JVM为每个线程分配的一个私有缓存区域，否则，多线程同时分配内存时，为避免操作同一地址，可能需要使用加锁等机制，进而影响分配速
+度，你可以参考下面的示意图。从图中可以看出， TLAB仍然在堆上，它是分配在Eden区域内的。其内部结构比较直观易懂， start、 end就是起始地址， top（指针）则表示已经
+分配到哪里了。所以我们分配新对象， JVM就会移动top，当top和end相遇时，即表示该缓存已满， JVM会试图再从Eden里分配一块儿。
+
+![在这里插入图片描述](https://img-blog.csdnimg.cn/20191120172701892.png?x-oss-process=image/watermark,type_ZmFuZ3poZW5naGVpdGk,shadow_10,text_aHR0cHM6Ly9ibG9nLmNzZG4ubmV0L1NoZWxsZXlMaXR0bGVoZXJv,size_16,color_FFFFFF,t_70)
+
+2.老年代
+放置长生命周期的对象，通常都是从Survivor区域拷贝过来的对象。当然，也有特殊情况，我们知道普通的对象会被分配在TLAB上；如果对象较大， JVM会试图直接分配在Eden其
+他位置上；如果对象太大，完全无法在新生代找到足够长的连续空闲空间， JVM就会直接分配到老年代。
+
+
+3.永久代
+这部分就是早期Hotspot JVM的方法区实现方式了，储存Java类元数据、常量池、 Intern字符串缓存，在JDK 8之后就不存在永久代这块儿了。
+
+那么，我们如何利用JVM参数，直接影响堆和内部区域的大小呢？我来简单总结一下：
+- 最大堆体积
+```
+-Xmx value
+
+```
+
+- 初始的最小堆体积
+```
+-Xms value
+```
+
+- 老年代和新生代的比例
+```
+-XX:NewRatio=value
+```
+默认情况下，这个数值是3，意味着老年代是新生代的3倍大；换句话说，新生代是堆大小的1/4。
+当然，也可以不用比例的方式调整新生代的大小，直接指定下面的参数，设定具体的内存大小数值.
+```
+-XX:NewSize=value
+```
+Eden和Survivor的大小是按照比例设置的，如果SurvivorRatio是8，那么Survivor区域就是Eden的1/8大小，也就是新生代的1/10，因为YoungGen=Eden +2*Survivor
+JVM参数格式是
+```
+-XX:SurvivorRatio=value
+```
+
+
 
 
 
