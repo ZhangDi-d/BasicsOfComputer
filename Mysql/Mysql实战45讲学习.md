@@ -490,17 +490,69 @@ mysql> select * from tuser where name like '张%' and age=10 and ismale=1;
 
 
 
+你已经知道了前缀索引规则， <font color=red>所以这个语句在搜索索引树的时候， 只能用 “张”， 找到第一个满足条件的记录ID3。</font> 当然， 这还不错， 总比全表扫描要好。
+
+**备注:怎么理解上面红色字体的问题?**
+
+推测语句有两种执行可能：
+
+1. 根据（username,age）联合索引查询所有满足名称以“张”开头的索引，然后回表查询出相应的全行数据，然后再筛选出满足年龄等于10的用户数据
+
+2. 根据（username,age）联合索引查询所有满足名称以“张”开头的索引，然后直接再筛选出年龄等于10的索引，之后再回表查询全行数据。
+
+而这第二种执行方式就是mysql 的索引下推 
+
+在MySQL 5.6之前， 只能从ID3开始一个个回表。 到主键索引上找出数据行， 再对比字段值。
+
+而MySQL 5.6 引入的索引下推优化（ indexcondition pushdown)， 可以在索引遍历过程中， 对索
+引中包含的字段先做判断， 直接过滤掉不满足条件的记录， 减少回表次数。
+
+**无索引下推执行流程:**
+
+![在这里插入图片描述](https://img-blog.csdnimg.cn/20200121162852524.png?x-oss-process=image/watermark,type_ZmFuZ3poZW5naGVpdGk,shadow_10,text_aHR0cHM6Ly9ibG9nLmNzZG4ubmV0L1NoZWxsZXlMaXR0bGVoZXJv,size_16,color_FFFFFF,t_70)
 
 
+**索引下推执行流程:**
+
+![在这里插入图片描述](https://img-blog.csdnimg.cn/20200121162910329.png?x-oss-process=image/watermark,type_ZmFuZ3poZW5naGVpdGk,shadow_10,text_aHR0cHM6Ly9ibG9nLmNzZG4ubmV0L1NoZWxsZXlMaXR0bGVoZXJv,size_16,color_FFFFFF,t_70)
+
+图3中， 在(name,age)索引里面我特意去掉了age的值， 这个过程InnoDB并不会去看age的值，
+只是按顺序把“name第一个字是’张’”的记录一条条取出来回表。 因此， 需要回表4次。
+
+图4跟图3的区别是， InnoDB在(name,age)索引内部就判断了age是否等于10， 对于不等于10的
+记录， 直接判断并跳过。 在我们的这个例子中， 只需要对ID4、 ID5这两条记录回表取数据判
+断， 就只需要回表2次。
 
 
+#### 问题
+实际上主键索引也是可以使用多个字段的。 DBA小吕在入职新公司的时候， 就发现自己接手维
+护的库里面， 有这么一个表， 表结构定义类似这样的：
+```
+CREATE TABLE `geek` (
+`a` int(11) NOT NULL,
+`b` int(11) NOT NULL,
+`c` int(11) NOT NULL,
+`d` int(11) NOT NULL,
+PRIMARY KEY (`a`,`b`),
+KEY `c` (`c`),
+KEY `ca` (`c`,`a`),
+KEY `cb` (`c`,`b`)
+) ENGINE=InnoDB;
+```
 
+公司的同事告诉他说， 由于历史原因， 这个表需要a、 b做联合主键， 这个小吕理解了。
 
+但是， 学过本章内容的小吕又纳闷了， 既然主键包含了a、 b这两个字段， 那意味着单独在字段c
+上创建一个索引， 就已经包含了三个字段了呀， 为什么要创建“ca”“cb”这两个索引？
 
+同事告诉他， 是因为他们的业务里面有这样的两种语句：
 
+```
+select * from geek where c=N order by a limit 1;
+select * from geek where c=N order by b limit 1;
+```
 
-
-
+我给你的问题是， 这位同事的解释对吗， 为了这两个查询模式， **这两个索引是否都是必须的？** 为什么呢？
 
 
 
