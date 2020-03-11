@@ -307,10 +307,6 @@ docker search [OPTIONS] TERM
 |--no-trunc	|false	|不截断输出，显示完整的输出|
 |--stars, -s|	0|	只展示Star不低于该数值的结果 (废弃)|
 
-|11|11|
-|:--|:--|
-|1|1|
-
 
 示例:
 ```
@@ -335,7 +331,15 @@ docker pull [OPTIONS] NAME[:TAG|@DIGEST]
 示例:
 ```
 docker pull reg.itmuch.com/java:7
+```
 
+
+#### 使用inspect命令查看详细信息
+
+如
+
+```
+docker inspect nginx 
 ```
 
 #### 列出镜像[重要]
@@ -447,6 +451,502 @@ docker build [OPTIONS] PATH | URL | -
 
 参数：
 http://www.itmuch.com/docker/04-docker-command-images/
+
+
+### 容器常用命令
+
+#### 新建并启动容器[重要]
+
+使用以下docker run 命令即可新建并启动一个容器。
+
+① -d选项：表示后台运行
+
+② -P选项：随机端口映射
+
+③ -p选项：指定端口映射，有以下四种格式。
+
+ip:hostPort:containerPort
+
+ip::containerPort
+
+hostPort:containerPort
+
+containerPort
+
+④ –network选项：指定网络模式，该选项有以下可选参数：
+
+–network=bridge： 默认选项，表示连接到默认的网桥。
+
+–network=host：容器使用宿主机的网络。
+
+–network=container:NAME_or_ID：告诉Docker让新建的容器使用已有容器的网络配置。
+
+–network=none：不配置该容器的网络，用户可自定义网络配置。
+
+示例1：
+```
+docker run java /bin/echo 'Hello World'
+
+```
+
+示例:
+```
+docker run -d -p 91:80 nginx
+
+```
+
+
+#### 列出容器[重要]
+
+使用docker ps 命令即可列出运行中的容器。执行该命令后，可看到类似于如下的表格。
+```
+CONTAINER ID        IMAGE               COMMAND                  CREATED             STATUS              PORTS                         NAMES
+784fd3b294d7        nginx               "nginx -g 'daemon off"   20 minutes ago      Up 2 seconds        443/tcp, 0.0.0.0:91->80/tcp   backstabbing_archimedes
+```
+
+
+该表格包含了七列，含义如下：
+
+① CONTAINER_ID：表示容器ID。
+
+② IMAGE：表示镜像名称。
+
+③ COMMAND：表示启动容器时运行的命令。
+
+④ CREATED：表示容器的创建时间。
+
+⑤ STATUS：表示容器运行的状态。Up表示运行中，Exited表示已停止。
+
+⑥ PORTS：表示容器对外的端口号。
+
+⑦ NAMES：表示容器名称。该名称默认由Docker自动生成，也可使用docker run命令的–name选项自行指定。
+
+
+命令格式：
+```
+docker ps [OPTIONS]
+```
+参数：
+
+|Name, shorthand|	Default	|Description|
+|:----|:----|:----|
+|--all, -a	|false	|列出所有容器，包括未运行的容器，默认只展示运行的容器|
+|--filter, -f|		|根据条件过滤显示内容|
+|--format|		|通过Go语言模板文件展示镜像|
+|--last, -n	|-1	|显示最近创建n个容器（包含所有状态）|
+|--latest, |-l	false|	显示最近创建的容器（包含所有状态）|
+|--no-trunc|	false|	不截断输出|
+|--quiet, -q|	false|	静默模式，只展示容器的编号|
+|--size, -s|	false|	显示总文件大小|
+
+
+#### 停止容器[重要]
+
+使用docker stop 命令，即可停止容器。
+
+命令格式：
+```
+docker stop [OPTIONS] CONTAINER [CONTAINER...]
+```
+参数：
+
+|Name, shorthand	|Default|	Description|
+|:---|:---|:---|
+|--time, -t|	10|	强制杀死容器前等待的时间，单位是秒|
+
+
+#### 强制停止容器[重要]
+
+可使用docker kill 命令停止一个或更多运行着的容器。
+
+命令格式：
+```
+docker kill [OPTIONS] CONTAINER [CONTAINER...]
+```
+参数：
+
+|Name, shorthand|	Default|	Description|
+|--signal, -s|	KILL|	向容器发送一个信号|
+
+
+
+#### 启动已停止的容器[重要]
+使用docker run 命令，即可新建并启动一个容器。对于已停止的容器，可使用docker start 命令来启动。
+
+命令格式：
+```
+docker start [OPTIONS] CONTAINER [CONTAINER...]
+```
+参数：
+
+|Name, shorthand	|Default|	Description|
+|:----|:----|:----|
+|--attach, -a	|false	|连接STDOUT/STDERR并转发信号|
+|--checkpoint	|	|从该检查点还原|
+|--checkpoint-dir|		|使用自定义的检查点存储目录|
+|--detach-keys	|	|覆盖断开容器的关键顺序|
+|--interactive, -i|	false	|连接容器的STDIN|
+
+
+#### 重启容器[重要]
+可使用docker restart 命令来重启容器。该命令实际上是先执行了docker stop 命令，然后执行了docker start 命令。
+
+命令格式：
+```
+docker restart [OPTIONS] CONTAINER [CONTAINER...]
+```
+参数：
+
+|Name, shorthand|	Default|	Description|
+|:------|:----|:----|
+|--time, -t	10	|关闭容器前等待的时间，单位是秒|
+
+示例:
+````
+docker restart --time=10  08dc7fe747f6
+```
+
+#### 进入容器[重要]
+某场景下，我们可能需要进入运行中的容器。
+
+① 使用`docker attach` 命令进入容器。
+
+例如：
+```
+docker attach 784fd3b294d7
+````
+
+很多场景下，使用docker attach 命令并不方便。当多个窗口同时attach到同一个容器时，所有窗口都会同步显示。同理，如果某个窗口发生阻塞，其他窗口也无法执行操作。
+
+② 使用nsenter 进入容器
+
+nsenter工具包含在util-linux 2.23或更高版本中。为了连接到容器，我们需要找到容器第一个进程的PID，可通过以下命令获取：
+```
+docker inspect --format "{{.State.Pid}}" $CONTAINER_ID
+```
+获得PID后，就可使用nsenter命令进入容器了：
+```
+nsenter --target "$PID" --mount --uts --ipc --net --pid
+```
+下面给出一个完整的例子：
+```
+[root@localhost ~]# docker ps
+CONTAINER ID        IMAGE               COMMAND                  CREATED             STATUS              PORTS                         NAMES
+784fd3b294d7        nginx               "nginx -g 'daemon off"   55 minutes ago      Up 3 minutes        443/tcp, 0.0.0.0:91->80/tcp   backstabbing_archimedes
+[root@localhost ~]# docker inspect --format "{{.State.Pid}}" 784fd3b294d7
+95492
+[root@localhost ~]# nsenter --target 95492 --mount --uts --ipc --net --pid
+root@784fd3b294d7:/#
+```
+读者也可将以上两条命令封装成一个Shell，从而简化进入容器的过程。
+
+③ docker exec
+```
+docker exec -it 容器id /bin/bash
+```
+
+
+#### 退出容器[重要]
+
+ctl+d 退出容器
+
+
+#### 删除容器[重要]
+使用docker rm 命令即可删除指定容器。
+
+命令格式
+```
+docker rm [OPTIONS] CONTAINER [CONTAINER...]
+```
+
+参数：
+
+|Name, shorthand|	Default|	Description|
+|:---|:---|:---|
+|--force, -f|	false	|通过SIGKILL信号强制删除正在运行中的容器|
+|--link, -l|	false	|删除容器间的网络连接|
+|--volumes, -v|	false	|删除与容器关联的卷|
+
+例1：删除指定容器。
+```
+docker rm 784fd3b294d7
+```
+
+该命令只能删除已停止的容器，如需删除正在运行的容器，可使用-f参数。
+
+例2：删除所有的容器。
+```
+docker rm -f $(docker ps -a -q)
+```
+
+
+
+#### 导出容器
+将容器导出成一个压缩包文件。
+
+命令格式：
+```
+docker export [OPTIONS] CONTAINER
+```
+
+参数：
+
+|Name, shorthand|	Default	|Description|
+|:----|:----|:----|
+|--output, -o|		|将内容写到文件而非STDOUT|
+
+示例：
+```
+docker export red_panda > latest.tar
+docker export --output="latest.tar" red_panda
+```
+
+#### 导入容器
+使用docker import 命令即可从归档文件导入内容并创建镜像。
+
+命令格式：
+```
+docker import [OPTIONS] file|URL|- [REPOSITORY[:TAG]]
+```
+参数：
+
+|Name, shorthand	|Default	|Description|
+|--change, -c|		|将Dockerfile指令应用到创建的镜像|
+|--message, -m|		|为导入的镜像设置提交信息|
+
+示例：
+```
+docker import nginx2.tar nginx
+```
+
+
+### 访问nginx
+https://blog.csdn.net/ShelleyLittlehero/article/details/104794738
+
+### Dockerfile指令详解
+
+什么是 Dockerfile？
+Dockerfile 是一个用来构建镜像的文本文件，文本内容包含了一条条构建镜像所需的指令和说明。
+
+#### ADD 复制文件
+
+DD指令用于复制文件，格式为：
+```
+ADD <src>... <dest>
+ADD ["<src>",... "<dest>"]
+```
+
+注意 : 
+
+① src必须在构建的上下文内，不能使用例如：ADD ../somethine /something 这样的命令，因为docker build 命令首先会将上下文路径和其子目录发送到docker daemon。
+
+② 如果src是一个URL，同时dest不以斜杠结尾，dest将会被视为文件，src对应内容文件将会被下载到dest。
+
+③ 如果src是一个URL，同时dest以斜杠结尾，dest将被视为目录，src对应内容将会被下载到dest目录。
+
+④ 如果src是一个目录，那么整个目录下的内容将会被拷贝，包括文件系统元数据。
+
+⑤ 如果文件是可识别的压缩包格式，则docker会自动解压。
+
+
+
+
+
+示例:
+```
+ADD microservice-discovery-eureka-0.0.1-SNAPSHOT.jar app.jar
+
+```
+
+
+#### ARG 设置构建参数
+ARG指令用于设置构建参数，类似于ENV。和ARG不同的是，ARG设置的是构建时的环境变量，在容器运行时是不会存在这些变量的。
+
+格式为：
+```
+ARG <name>[=<default value>]
+```
+
+示例：
+```
+ARG user1=someuser
+```
+
+详细介绍文档：https://www.centos.bz/2016/12/dockerfile-arg-instruction/
+
+
+
+#### CMD 容器启动命令
+CMD指令用于为执行容器提供默认值。每个Dockerfile只有一个CMD命令，如果指定了多个CMD命令，那么只有最后一条会被执行，如果启动容器的时候指定了运行的命令，则会覆盖掉CMD指定的命令。
+
+支持三种格式：
+```
+CMD ["executable","param1","param2"] (推荐使用)
+
+CMD ["param1","param2"] (为ENTRYPOINT指令提供预设参数)
+
+CMD command param1 param2 (在shell中执行)
+```
+
+示例：
+```
+CMD echo "This is a test." | wc -
+```
+
+
+#### COPY 复制文件
+复制文件，格式为：
+```
+COPY <src>... <dest>
+COPY ["<src>",... "<dest>"]
+```
+
+复制本地端的src到容器的dest。COPY指令和ADD指令类似，COPY不支持URL和压缩包。
+
+#### ENTRYPOINT 入口点
+格式为：
+
+```
+ENTRYPOINT ["executable", "param1", "param2"]
+ENTRYPOINT command param1 param2
+```
+
+ENTRYPOINT和CMD指令的目的一样，都是指定Docker容器启动时执行的命令，可多次设置，但只有最后一个有效。ENTRYPOINT不可被重写覆盖。
+
+ENTRYPOINT、CMD区别：http://blog.csdn.net/newjueqi/article/details/51355510
+
+ENV 设置环境变量
+ENV指令用于设置环境变量，格式为：
+```
+ENV <key> <value>
+ENV <key>=<value> ...
+```
+
+示例：
+```
+ENV JAVA_HOME /path/to/java
+```
+
+
+#### EXPOSE 声明暴露的端口
+EXPOSE指令用于声明在运行时容器提供服务的端口，格式为：
+```
+EXPOSE <port> [<port>...]
+```
+
+需要注意的是，这只是一个声明，运行时并不会因为该声明就打开相应端口。该指令的作用主要是帮助镜像使用者理解该镜像服务的守护端口；其次是当运行时使用随机映射时，会自动映射EXPOSE的端口。示例：
+```
+# 声明暴露一个端口示例
+EXPOSE port1
+# 相应的运行容器使用的命令
+docker run -p port1 image
+# 也可使用-P选项启动
+docker run -P image
+
+# 声明暴露多个端口示例
+EXPOSE port1 port2 port3
+# 相应的运行容器使用的命令
+docker run -p port1 -p port2 -p port3 image
+# 也可指定需要映射到宿主机器上的端口号  
+docker run -p host_port1:port1 -p host_port2:port2 -p host_port3:port3 image
+
+```
+
+
+#### FROM 指定基础镜像
+使用FROM指令指定基础镜像，FROM指令有点像Java里面的“extends”关键字。需要注意的是，FROM指令必须指定且需要写在其他指令之前。FROM指令后的所有指令都依赖于该指令所指定的镜像。
+
+支持三种格式：
+```
+FROM <image>
+FROM <image>:<tag>
+FROM <image>@<digest>
+```
+
+#### LABEL 为镜像添加元数据
+LABEL指令用于为镜像添加元数据。
+
+格式为：
+```
+LABEL <key>=<value> <key>=<value> <key>=<value> ...
+```
+
+使用 ””“和”\“转换命令行，示例：
+
+```
+LABEL "com.example.vendor"="ACME Incorporated"
+LABEL com.example.label-with-value="foo"
+LABEL version="1.0"
+LABEL description="This text illustrates \
+that label-values can span multiple lines."
+```
+
+#### MAINTAINER 指定维护者的信息（已过时）
+
+注：该指令已过时，建议使用如下形式：
+```
+LABEL maintainer="SvenDowideit@home.org.au"
+```
+
+
+#### RUN 执行命令
+
+该指令支持两种格式：
+```
+RUN <command>
+RUN ["executable", "param1", "param2"]
+RUN <command> 在shell终端中运行，在Linux中默认是/bin/sh -c ，在Windows中是 cmd /s /c ，使用这种格式，就像直接在命令行中输入命令一样。
+RUN ["executable", "param1", "param2"] 使用exec执行，这种方式类似于函数调用。指定其他终端可以通过该方式操作，例如：RUN ["/bin/bash", "-c", "echo hello"] ，该方式必须使用双引号[“]而不能使用单引号[‘]，因为该方式会被转换成一个JSON 数组。
+```
+
+
+#### USER 设置用户
+该指令用于设置启动镜像时的用户或者UID，写在该指令后的RUN、CMD以及ENTRYPOINT指令都将使用该用户执行命令。
+
+格式为：
+
+USER 用户名
+示例：
+```
+USER daemon
+```
+
+
+#### VOLUME 指定挂载点
+该指令使容器中的一个目录具有持久化存储的功能，该目录可被容器本身使用，也可共享给其他容器。当容器中的应用有持久化数据的需求时可以在Dockerfile中使用该指令。格式为：
+```
+VOLUME ["/data"]
+```
+
+示例：
+```
+VOLUME /data
+```
+
+使用示例：
+```
+FROM nginx
+VOLUME /tmp
+```
+当该Dockerfile被构建成镜像后，/tmp目录中的数据即使容器关闭也依然存在。如果另一个容器也有持久化的需求，并且想使用以上容器/tmp目录中的内容，则可使用如下命令启动容器：
+```
+docker run -volume-from 容器ID 镜像名称  # 容器ID是di一个容器的ID，镜像是第二个容器所使用的镜像。
+```
+
+#### WORKDIR 指定工作目录
+格式为：
+```
+WORKDIR /path/to/workdir
+```
+切换目录指令，类似于cd命令，写在该指令后的RUN，CMD以及ENTRYPOINT指令都将该目录作为当前目录，并执行相应的命令。
+
+
+
+
+
+
+
+
 
 
 
